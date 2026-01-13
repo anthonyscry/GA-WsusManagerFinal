@@ -103,7 +103,21 @@ class SqlService {
         ` : ''}
         
         try {
-          Import-Module SqlServer -ErrorAction Stop
+          # Try to import SqlServer module (PSGallery) or SQLPS (SQL Server installation)
+          $moduleLoaded = $false
+          foreach ($moduleName in @('SqlServer', 'SQLPS')) {
+            if (Get-Module -ListAvailable -Name $moduleName -ErrorAction SilentlyContinue) {
+              Import-Module $moduleName -ErrorAction Stop -DisableNameChecking
+              $moduleLoaded = $true
+              break
+            }
+          }
+          
+          if (-not $moduleLoaded) {
+            Write-Error "No SQL PowerShell module found. Install SqlServer module: Install-Module SqlServer -Scope CurrentUser"
+            exit 1
+          }
+          
           $results = Invoke-Sqlcmd -ServerInstance $serverInstance -Database $database -Query @"
 ${query}
 "@ ${saPassword ? '-Credential $credential' : '-TrustedConnection'} -ErrorAction Stop
@@ -221,11 +235,13 @@ ${query}
    */
   private async getLastBackupDate(saPassword?: string): Promise<string> {
     try {
+      // Sanitize database name (should only contain alphanumeric, underscore)
+      const safeDatabaseName = this.databaseName.replace(/[^a-zA-Z0-9_]/g, '');
       const query = `
         SELECT TOP 1 
           backup_finish_date 
         FROM msdb.dbo.backupset 
-        WHERE database_name = '${this.databaseName}'
+        WHERE database_name = '${safeDatabaseName}'
         ORDER BY backup_finish_date DESC
       `;
 

@@ -18,23 +18,25 @@ class WsusService {
 
     try {
       // Check if WSUS PowerShell module is available
+      // NOTE: UpdateServices module comes with WSUS Windows Server role - it cannot be installed from PSGallery
       const moduleAvailable = await powershellService.checkModule('UpdateServices');
       
       if (!moduleAvailable) {
-        loggingService.warn('WSUS PowerShell module not found. Installing UpdateServices module...');
-        // Try to install the module (requires admin)
-        const installResult = await powershellService.execute(
-          'Install-Module -Name UpdateServices -Force -Scope CurrentUser -AllowClobber -ErrorAction SilentlyContinue'
-        );
-        
-        if (!installResult.success) {
-          loggingService.error('Failed to install WSUS PowerShell module. Please install manually.');
-          return false;
-        }
+        // UpdateServices is a Windows Feature module, not a PSGallery module
+        // It's installed when you add the WSUS role to Windows Server
+        loggingService.warn('WSUS PowerShell module (UpdateServices) not found.');
+        loggingService.warn('This module is part of the WSUS Windows Server role.');
+        loggingService.warn('To install: Add-WindowsFeature -Name UpdateServices -IncludeManagementTools');
+        loggingService.info('Running in standalone mode without WSUS connection.');
+        return false;
       }
 
       // Import the module
-      await powershellService.importModule('UpdateServices');
+      const importResult = await powershellService.importModule('UpdateServices');
+      if (!importResult.success) {
+        loggingService.warn('Failed to import UpdateServices module. Running in standalone mode.');
+        return false;
+      }
       
       loggingService.info(`WSUS Service initialized: ${server}:${port} (SSL: ${useSsl})`);
       return true;

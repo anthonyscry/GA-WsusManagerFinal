@@ -74,10 +74,10 @@ function createWindow() {
 
   const iconPath = path.join(__dirname, 'build', 'icon.png');
   mainWindow = new BrowserWindow({
-    width: 1366,
-    height: 900,
-    minWidth: 1024,
-    minHeight: 768,
+    width: 1100,
+    height: 700,
+    minWidth: 800,
+    minHeight: 600,
     backgroundColor: '#0a0a0c',
     title: 'GA-WsusManager Pro | Portable Hub',
     icon: fs.existsSync(iconPath) ? iconPath : undefined,
