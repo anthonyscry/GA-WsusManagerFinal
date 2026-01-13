@@ -1,10 +1,9 @@
 
 import React, { useMemo } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, AreaChart, Area } from 'recharts';
 import { EnvironmentStats } from '../types';
 import { useResourceMonitoring } from '../hooks/useResourceMonitoring';
 import { useThroughputData } from '../hooks/useThroughputData';
-import { useComplianceTrends } from '../hooks/useComplianceTrends';
 import { useDiagnostics } from '../hooks/useDiagnostics';
 import { calculateDatabaseUsagePercentage } from '../utils/calculations';
 import { getDatabaseUsageColor } from '../utils/statusHelpers';
@@ -21,7 +20,6 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
   const resources = useResourceMonitoring();
   const throughputData = useThroughputData();
-  const complianceTrends = useComplianceTrends(stats);
   const { isDiagnosing, runDiagnostics } = useDiagnostics();
 
   const pieData = useMemo(() => generatePieChartData(stats), [
@@ -38,7 +36,8 @@ const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
 
   const dbUsageColor = useMemo(() => getDatabaseUsageColor(dbPercentage), [dbPercentage]);
 
-  const isConnected = stats.isInstalled && stats.totalComputers > 0;
+  // Check if WSUS is connected - don't require computers to be present
+  const isConnected = stats.isInstalled;
 
   return (
     <div className="space-y-4 animate-fadeIn pb-8">
@@ -74,9 +73,9 @@ const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
          </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
          <StatCard label="Total Nodes" value={stats.totalComputers} color="blue" />
-         
+
          {/* DB Card */}
          <div className="bg-[#121216] p-3 rounded-lg border border-slate-800/40 shadow-lg group hover:border-blue-500/30 transition-all">
             <div className="flex justify-between items-start mb-0.5">
@@ -87,14 +86,13 @@ const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
             </div>
             <p className="text-lg font-black tracking-tight text-white">{formatGB(stats.db.currentSizeGB, 0)} <span className="text-[10px] text-slate-400 font-bold uppercase">/ {formatGB(stats.db.maxSizeGB, 0)}</span></p>
             <div className="mt-2 h-1 w-full bg-slate-900 rounded-full overflow-hidden">
-               <div 
-                  className={`h-full transition-all duration-1000 ${dbUsageColor}`} 
+               <div
+                  className={`h-full transition-all duration-1000 ${dbUsageColor}`}
                   style={{ width: `${dbPercentage}%` }}
                ></div>
             </div>
          </div>
 
-         <StatCard label="Compliance" value={stats.totalComputers > 0 ? `${Math.round((stats.healthyComputers / stats.totalComputers) * 100)}%` : 'N/A'} color="emerald" />
          <StatCard label="Storage" value={formatGB(stats.diskFreeGB)} color="slate" />
       </div>
 
@@ -139,61 +137,6 @@ const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
                 </div>
               </div>
             )}
-          </div>
-
-          {/* Compliance Trends Chart */}
-          <div className="bg-[#121216] rounded-xl p-4 border border-slate-800/40 shadow-lg">
-             <div className="flex justify-between items-center mb-3">
-                <div>
-                  <h3 className="text-xs font-black text-white uppercase tracking-widest">Compliance Trends</h3>
-                  <p className="text-[10px] font-bold text-slate-400 mt-0.5 uppercase">30-Day Historical View</p>
-                </div>
-                {complianceTrends.length > 0 && (
-                  <span className="text-[10px] font-bold text-emerald-500 mono uppercase tracking-tight">
-                    Current: {complianceTrends[complianceTrends.length - 1]?.compliance || 0}%
-                  </span>
-                )}
-             </div>
-             {complianceTrends.length === 0 ? (
-               <div className="h-32 w-full flex items-center justify-center">
-                 <div className="text-center">
-                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">No trend data available</p>
-                 </div>
-               </div>
-             ) : (
-               <div className="h-32 w-full">
-                 <ResponsiveContainer width="100%" height="100%">
-                   <LineChart data={complianceTrends}>
-                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                     <XAxis 
-                       dataKey="date" 
-                       stroke="#64748b"
-                       tick={{ fill: '#64748b', fontSize: 8, fontWeight: 'bold' }}
-                       interval="preserveStartEnd"
-                     />
-                     <YAxis 
-                       domain={[0, 100]}
-                       stroke="#64748b"
-                       tick={{ fill: '#64748b', fontSize: 8, fontWeight: 'bold' }}
-                       width={30}
-                     />
-                     <Tooltip 
-                       contentStyle={{ backgroundColor: '#121216', border: '1px solid #1e293b', borderRadius: '8px', fontSize: '10px', padding: '6px' }}
-                       labelStyle={{ color: '#94a3b8', fontWeight: 'bold', fontSize: '8px' }}
-                     />
-                     <Line 
-                       type="monotone" 
-                       dataKey="compliance" 
-                       stroke="#10b981" 
-                       strokeWidth={2}
-                       dot={{ fill: '#10b981', r: 2 }}
-                       activeDot={{ r: 4 }}
-                       name="Compliance %"
-                     />
-                   </LineChart>
-                 </ResponsiveContainer>
-               </div>
-             )}
           </div>
 
           {/* Network Graph Simulation */}

@@ -677,6 +677,176 @@ class WsusService {
     };
   }
 
+  /**
+   * Auto-fix common WSUS issues
+   * Based on common WSUS troubleshooting patterns
+   */
+  async autoFixCommonIssues(): Promise<{
+    checks: Array<{ name: string; status: 'ok' | 'fixed' | 'failed'; message: string }>;
+    fixed: number;
+    failed: number;
+    ok: number;
+  }> {
+    const checks: Array<{ name: string; status: 'ok' | 'fixed' | 'failed'; message: string }> = [];
+    let fixed = 0;
+    let failed = 0;
+    let ok = 0;
+
+    try {
+      const script = `
+        $results = @()
+
+        # Check 1: WSUS Service
+        $wsusService = Get-Service -Name WsusService -ErrorAction SilentlyContinue
+        if ($wsusService) {
+          if ($wsusService.Status -ne 'Running') {
+            try {
+              Start-Service WsusService -ErrorAction Stop
+              Start-Sleep -Seconds 2
+              $results += @{ Name = 'WSUS Service'; Status = 'fixed'; Message = 'Service was stopped, now started' }
+            } catch {
+              $results += @{ Name = 'WSUS Service'; Status = 'failed'; Message = "Failed to start: $_" }
+            }
+          } else {
+            $results += @{ Name = 'WSUS Service'; Status = 'ok'; Message = 'Running normally' }
+          }
+        } else {
+          $results += @{ Name = 'WSUS Service'; Status = 'failed'; Message = 'Service not found - WSUS may not be installed' }
+        }
+
+        # Check 2: SQL Server Service
+        $sqlService = Get-Service -Name 'MSSQL$SQLEXPRESS' -ErrorAction SilentlyContinue
+        if (-not $sqlService) {
+          $sqlService = Get-Service -Name 'MSSQLSERVER' -ErrorAction SilentlyContinue
+        }
+        if ($sqlService) {
+          if ($sqlService.Status -ne 'Running') {
+            try {
+              Start-Service $sqlService.Name -ErrorAction Stop
+              Start-Sleep -Seconds 2
+              $results += @{ Name = 'SQL Server'; Status = 'fixed'; Message = 'Service was stopped, now started' }
+            } catch {
+              $results += @{ Name = 'SQL Server'; Status = 'failed'; Message = "Failed to start: $_" }
+            }
+          } else {
+            $results += @{ Name = 'SQL Server'; Status = 'ok'; Message = 'Running normally' }
+          }
+        } else {
+          $results += @{ Name = 'SQL Server'; Status = 'failed'; Message = 'SQL Server service not found' }
+        }
+
+        # Check 3: IIS Service
+        $iisService = Get-Service -Name W3SVC -ErrorAction SilentlyContinue
+        if ($iisService) {
+          if ($iisService.Status -ne 'Running') {
+            try {
+              Start-Service W3SVC -ErrorAction Stop
+              Start-Sleep -Seconds 2
+              $results += @{ Name = 'IIS (W3SVC)'; Status = 'fixed'; Message = 'Service was stopped, now started' }
+            } catch {
+              $results += @{ Name = 'IIS (W3SVC)'; Status = 'failed'; Message = "Failed to start: $_" }
+            }
+          } else {
+            $results += @{ Name = 'IIS (W3SVC)'; Status = 'ok'; Message = 'Running normally' }
+          }
+        } else {
+          $results += @{ Name = 'IIS (W3SVC)'; Status = 'failed'; Message = 'IIS service not found' }
+        }
+
+        # Check 4: WsusPool Application Pool
+        try {
+          Import-Module WebAdministration -ErrorAction SilentlyContinue
+          $pool = Get-Item "IIS:\\AppPools\\WsusPool" -ErrorAction SilentlyContinue
+          if ($pool) {
+            if ($pool.State -ne 'Started') {
+              Start-WebAppPool -Name 'WsusPool' -ErrorAction Stop
+              $results += @{ Name = 'WsusPool AppPool'; Status = 'fixed'; Message = 'Application pool was stopped, now started' }
+            } else {
+              $results += @{ Name = 'WsusPool AppPool'; Status = 'ok'; Message = 'Running normally' }
+            }
+          } else {
+            $results += @{ Name = 'WsusPool AppPool'; Status = 'ok'; Message = 'Not found (may use different name)' }
+          }
+        } catch {
+          $results += @{ Name = 'WsusPool AppPool'; Status = 'ok'; Message = 'WebAdministration module not available' }
+        }
+
+        # Check 5: WSUS Content Directory
+        $contentPath = (Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Update Services\\Server\\Setup' -Name ContentDir -ErrorAction SilentlyContinue).ContentDir
+        if ($contentPath) {
+          if (Test-Path $contentPath) {
+            $results += @{ Name = 'Content Directory'; Status = 'ok'; Message = "Path exists: $contentPath" }
+          } else {
+            $results += @{ Name = 'Content Directory'; Status = 'failed'; Message = "Path not found: $contentPath" }
+          }
+        } else {
+          $results += @{ Name = 'Content Directory'; Status = 'ok'; Message = 'Registry key not found (expected if WSUS not installed)' }
+        }
+
+        # Check 6: Disk Space
+        $cDrive = Get-PSDrive C -ErrorAction SilentlyContinue
+        if ($cDrive) {
+          $freeGB = [math]::Round($cDrive.Free / 1GB, 2)
+          if ($freeGB -lt 5) {
+            $results += @{ Name = 'Disk Space'; Status = 'failed'; Message = "Low disk space: $freeGB GB free" }
+          } elseif ($freeGB -lt 20) {
+            $results += @{ Name = 'Disk Space'; Status = 'ok'; Message = "Warning: $freeGB GB free (consider cleanup)" }
+          } else {
+            $results += @{ Name = 'Disk Space'; Status = 'ok'; Message = "$freeGB GB free" }
+          }
+        }
+
+        # Check 7: Reset WSUS if having issues (optional - only if services are running but WSUS unresponsive)
+        try {
+          Import-Module UpdateServices -ErrorAction SilentlyContinue
+          $wsus = Get-WsusServer -ErrorAction SilentlyContinue
+          if ($wsus) {
+            $results += @{ Name = 'WSUS Connection'; Status = 'ok'; Message = 'Connected successfully' }
+          } else {
+            $results += @{ Name = 'WSUS Connection'; Status = 'failed'; Message = 'Could not connect to WSUS server' }
+          }
+        } catch {
+          $results += @{ Name = 'WSUS Connection'; Status = 'failed'; Message = "Connection error: $_" }
+        }
+
+        $results | ConvertTo-Json -Compress
+      `;
+
+      const result = await powershellService.execute(script);
+
+      if (result.success && result.stdout) {
+        try {
+          const parsed = JSON.parse(result.stdout) as Array<{ Name: string; Status: string; Message: string }> | { Name: string; Status: string; Message: string };
+          const resultsArray = Array.isArray(parsed) ? parsed : [parsed];
+
+          for (const r of resultsArray) {
+            const status = r.Status.toLowerCase() as 'ok' | 'fixed' | 'failed';
+            checks.push({ name: r.Name, status, message: r.Message });
+
+            if (status === 'fixed') fixed++;
+            else if (status === 'failed') failed++;
+            else ok++;
+          }
+        } catch (parseError) {
+          loggingService.error('Failed to parse autofix results');
+          checks.push({ name: 'Parse Error', status: 'failed', message: 'Could not parse results' });
+          failed++;
+        }
+      } else {
+        loggingService.error(`Autofix script failed: ${result.stderr}`);
+        checks.push({ name: 'Script Execution', status: 'failed', message: result.stderr || 'Unknown error' });
+        failed++;
+      }
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      loggingService.error(`Autofix error: ${errorMessage}`);
+      checks.push({ name: 'Autofix', status: 'failed', message: errorMessage });
+      failed++;
+    }
+
+    return { checks, fixed, failed, ok };
+  }
+
   private mapHealthStatus(status: string): HealthStatus {
     switch (status?.toLowerCase()) {
       case 'healthy':
