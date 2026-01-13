@@ -1,6 +1,7 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+/* Tell Tailwind v4 to use our config file for content scanning */
+@config "./tailwind.config.js";
 
 @layer base {
   body { 
