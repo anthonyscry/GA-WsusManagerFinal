@@ -1,0 +1,37 @@
+# Workaround docker-compose.yml using existing local image
+# Use this if you can't pull the official Microsoft image due to network issues
+# To use: docker-compose -f docker-compose.workaround.yml up -d sqlserver
+
+services:
+  # SQL Server Container - Using existing local image
+  sqlserver:
+    image: kcollins/mssql:latest
+    container_name: wsus-sqlserver
+    hostname: wsus-sqlserver
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=WSUS_Admin123!
+      - MSSQL_PID=Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    networks:
+      - wsus-network
+    restart: unless-stopped
+    # Note: Healthcheck may need adjustment for this image
+    # healthcheck:
+    #   test: /opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P "WSUS_Admin123!" -Q "SELECT 1" || exit 1
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 5
+    #   start_period: 60s
+
+networks:
+  wsus-network:
+    driver: bridge
+    name: wsus-network
+
+volumes:
+  sqlserver_data:
+    name: wsus_sqlserver_data

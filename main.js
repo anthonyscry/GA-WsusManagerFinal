@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { exec } = require('child_process');
@@ -41,6 +41,29 @@ ipcMain.handle('execute-powershell', async (event, command, timeout = 30000) => 
       success: false
     };
   }
+});
+
+// IPC handler for file/directory selection dialog
+ipcMain.handle('show-open-dialog', async (event, options) => {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return { canceled: true, filePaths: [] };
+  }
+  
+  const result = await dialog.showOpenDialog(mainWindow, options);
+  return result;
+});
+
+// IPC handler for directory selection dialog
+ipcMain.handle('show-directory-dialog', async (event, options) => {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return { canceled: true, filePaths: [] };
+  }
+  
+  const result = await dialog.showOpenDialog(mainWindow, {
+    ...options,
+    properties: ['openDirectory']
+  });
+  return result;
 });
 
 function createWindow() {

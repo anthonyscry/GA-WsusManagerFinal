@@ -1,0 +1,51 @@
+services:
+  # SQL Server Container - Provides SUSDB database for WSUS
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: wsus-sqlserver
+    hostname: wsus-sqlserver
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=WSUS_Admin123!
+      - MSSQL_PID=Developer
+      - MSSQL_COLLATION=SQL_Latin1_General_CP1_CI_AS
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    networks:
+      - wsus-network
+    restart: unless-stopped
+    healthcheck:
+      test: /opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P "WSUS_Admin123!" -Q "SELECT 1" || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # Optional: Windows Server Container with WSUS (requires Windows host and Windows containers)
+  # Uncomment this service if running on Windows with Windows containers enabled
+  # wsus-server:
+  #   image: mcr.microsoft.com/windows/servercore:ltsc2022
+  #   container_name: wsus-server
+  #   hostname: wsus-server
+  #   networks:
+  #     - wsus-network
+  #   volumes:
+  #     - wsus_content:/WSUS/Content
+  #     - wsus_database:/WSUS/Database
+  #   # Note: WSUS installation requires Windows Server and cannot be fully automated in Docker
+  #   # This container provides the base OS; WSUS must be installed manually or via custom image
+
+networks:
+  wsus-network:
+    driver: bridge
+    name: wsus-network
+
+volumes:
+  sqlserver_data:
+    name: wsus_sqlserver_data
+  # wsus_content:
+  #   name: wsus_content
+  # wsus_database:
+  #   name: wsus_database

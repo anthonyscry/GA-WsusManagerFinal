@@ -49,8 +49,8 @@ const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
             </div>
             <div>
-               <h3 className="text-xs font-black tracking-widest uppercase text-white">Environment Integrity</h3>
-               <p className={`text-[10px] font-bold uppercase mt-1 ${isConnected ? 'text-slate-500' : 'text-rose-400'}`}>
+               <h3 className="text-sm font-black tracking-widest uppercase text-white">Environment Integrity</h3>
+               <p className={`text-xs font-bold uppercase mt-1 ${isConnected ? 'text-slate-300' : 'text-rose-400'}`}>
                  {isConnected ? 'Infrastructure operational on portable runspace' : 'WSUS not connected - No data available'}
                </p>
             </div>
@@ -58,16 +58,16 @@ const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
          <div className="flex items-center gap-6 relative z-10">
             <div className="flex items-center gap-8 pr-6 border-r border-slate-800">
                 <div className="text-right">
-                    <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest">CPU LOAD</p>
-                    <p className="text-sm font-black text-white mono">{resources.cpu}%</p>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest">CPU LOAD</p>
+                    <p className="text-base font-black text-white mono">{resources.cpu}%</p>
                 </div>
                 <div className="text-right">
-                    <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest">RAM UTIL</p>
-                    <p className="text-sm font-black text-white mono">{formatPercentage(resources.ram)}</p>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest">RAM UTIL</p>
+                    <p className="text-base font-black text-white mono">{formatPercentage(resources.ram)}</p>
                 </div>
             </div>
             <div className={`px-4 py-2 rounded-lg border ${isConnected ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-rose-500/10 border-rose-500/20'}`}>
-               <span className={`text-[10px] font-black uppercase tracking-widest ${isConnected ? 'text-emerald-500' : 'text-rose-500'}`}>
+               <span className={`text-xs font-black uppercase tracking-widest ${isConnected ? 'text-emerald-500' : 'text-rose-500'}`}>
                  {isConnected ? 'System Stable' : 'Not Connected'}
                </span>
             </div>
@@ -81,12 +81,12 @@ const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
          {/* DB Card */}
          <div className="bg-[#121216] p-5 rounded-xl border border-slate-800/40 shadow-lg group hover:border-blue-500/30 transition-all">
             <div className="flex justify-between items-start mb-1">
-               <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest">Database Usage</p>
-               <span className={`text-[8px] font-black uppercase ${dbPercentage > DATABASE_WARNING_THRESHOLD ? 'text-rose-500' : 'text-amber-500'}`}>
+               <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Database Usage</p>
+               <span className={`text-xs font-black uppercase ${dbPercentage > DATABASE_WARNING_THRESHOLD ? 'text-rose-500' : 'text-amber-500'}`}>
                   {formatPercentage(dbPercentage)}
                </span>
             </div>
-            <p className="text-xl font-black tracking-tight text-white">{formatGB(stats.db.currentSizeGB, 0)} <span className="text-[10px] text-slate-600 font-bold uppercase">/ {formatGB(stats.db.maxSizeGB, 0)}</span></p>
+            <p className="text-2xl font-black tracking-tight text-white">{formatGB(stats.db.currentSizeGB, 0)} <span className="text-xs text-slate-400 font-bold uppercase">/ {formatGB(stats.db.maxSizeGB, 0)}</span></p>
             <div className="mt-3 h-1 w-full bg-slate-900 rounded-full overflow-hidden">
                <div 
                   className={`h-full transition-all duration-1000 ${dbUsageColor}`} 
@@ -104,15 +104,15 @@ const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
           <div className="bg-[#121216] rounded-2xl p-8 border border-slate-800/40 relative shadow-2xl">
             <div className="flex justify-between items-center mb-10">
                <div>
-                  <h3 className="text-xs font-black text-white uppercase tracking-widest">Topology Compliance</h3>
-                  <p className="text-[10px] font-bold text-slate-600 mt-1 uppercase">Distribution of Node Health</p>
+                  <h3 className="text-sm font-black text-white uppercase tracking-widest">Topology Compliance</h3>
+                  <p className="text-xs font-bold text-slate-400 mt-1 uppercase">Distribution of Node Health</p>
                </div>
             </div>
             {stats.totalComputers === 0 ? (
               <div className="h-[240px] w-full flex items-center justify-center">
                 <div className="text-center">
-                  <p className="text-sm font-black text-slate-500 uppercase tracking-widest mb-2">No Data Available</p>
-                  <p className="text-[10px] font-bold text-slate-700 uppercase tracking-tight">Connect to WSUS server to view topology</p>
+                  <p className="text-base font-black text-slate-400 uppercase tracking-widest mb-2">No Data Available</p>
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-tight">Connect to WSUS server to view topology</p>
                 </div>
               </div>
             ) : (
@@ -136,7 +136,7 @@ const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
                 </ResponsiveContainer>
                 <div className="absolute flex flex-col items-center">
                   <span className="text-3xl font-black text-white tracking-tighter">{stats.totalComputers}</span>
-                  <span className="text-[8px] text-slate-600 font-black uppercase tracking-widest">Total Nodes</span>
+                  <span className="text-xs text-slate-400 font-black uppercase tracking-widest">Total Nodes</span>
                 </div>
               </div>
             )}
@@ -146,11 +146,11 @@ const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
           <div className="bg-[#121216] rounded-2xl p-6 border border-slate-800/40 shadow-lg">
              <div className="flex justify-between items-center mb-6">
                 <div>
-                  <h3 className="text-[10px] font-black text-white uppercase tracking-widest">Compliance Trends</h3>
-                  <p className="text-[9px] font-bold text-slate-600 mt-1 uppercase">30-Day Historical View</p>
+                  <h3 className="text-sm font-black text-white uppercase tracking-widest">Compliance Trends</h3>
+                  <p className="text-xs font-bold text-slate-400 mt-1 uppercase">30-Day Historical View</p>
                 </div>
                 {complianceTrends.length > 0 && (
-                  <span className="text-[10px] font-bold text-emerald-500 mono uppercase tracking-tight">
+                  <span className="text-xs font-bold text-emerald-500 mono uppercase tracking-tight">
                     Current: {complianceTrends[complianceTrends.length - 1]?.compliance || 0}%
                   </span>
                 )}
@@ -158,8 +158,8 @@ const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
              {complianceTrends.length === 0 ? (
                <div className="h-48 w-full flex items-center justify-center">
                  <div className="text-center">
-                   <p className="text-[10px] font-bold text-slate-700 uppercase tracking-tight">No trend data available</p>
-                   <p className="text-[9px] text-slate-600 mt-1">Connect to WSUS to view compliance history</p>
+                   <p className="text-xs font-bold text-slate-400 uppercase tracking-tight">No trend data available</p>
+                   <p className="text-xs text-slate-500 mt-1">Connect to WSUS to view compliance history</p>
                  </div>
                </div>
              ) : (
@@ -207,8 +207,8 @@ const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
           {/* Network Graph Simulation */}
           <div className="bg-[#121216] rounded-2xl p-6 border border-slate-800/40 shadow-lg">
              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-[10px] font-black text-white uppercase tracking-widest">Network Throughput</h3>
-                <span className="text-[10px] font-bold text-slate-500 mono uppercase tracking-tight">Active Transfer: {(throughputData[throughputData.length - 1]?.val || 0).toFixed(1)} Mbps</span>
+                <h3 className="text-sm font-black text-white uppercase tracking-widest">Network Throughput</h3>
+                <span className="text-xs font-bold text-slate-400 mono uppercase tracking-tight">Active Transfer: {(throughputData[throughputData.length - 1]?.val || 0).toFixed(1)} Mbps</span>
              </div>
              <div className="h-32 w-full">
                 <ResponsiveContainer width="100%" height="100%">
@@ -221,21 +221,21 @@ const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
         </div>
 
         <div className="bg-[#121216] rounded-2xl p-8 border border-slate-800/40 flex flex-col h-full shadow-2xl">
-           <h3 className="text-xs font-black text-white uppercase tracking-widest mb-2">Service Monitor</h3>
-           <p className="text-[10px] font-bold text-slate-600 mb-8 uppercase">Live Runtime Heartbeat</p>
+           <h3 className="text-sm font-black text-white uppercase tracking-widest mb-2">Service Monitor</h3>
+           <p className="text-xs font-bold text-slate-400 mb-8 uppercase">Live Runtime Heartbeat</p>
            <div className="space-y-3 flex-1">
               {stats.services.length === 0 ? (
                 <div className="p-4 text-center">
-                  <p className="text-[10px] font-bold text-slate-700 uppercase tracking-tight">No service data available</p>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-tight">No service data available</p>
                 </div>
               ) : (
                 stats.services.map((s, i) => (
                   <div key={i} className="flex items-center justify-between p-4 bg-black/40 rounded-xl border border-slate-800/30 group hover:border-blue-500/20 transition-all">
                     <div className="flex items-center gap-3">
                       <div className={`w-1.5 h-1.5 rounded-full ${s.status === 'Running' ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-rose-500 shadow-[0_0_8px_#ef4444]'}`}></div>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">{s.name}</span>
+                      <span className="text-xs font-bold text-slate-300 uppercase tracking-tight">{s.name}</span>
                     </div>
-                    <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest">{s.status}</span>
+                    <span className="text-xs font-black text-slate-400 uppercase tracking-widest">{s.status}</span>
                   </div>
                 ))
               )}
@@ -243,7 +243,7 @@ const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
            <button 
             disabled={isDiagnosing}
             onClick={runDiagnostics}
-            className={`w-full mt-6 py-4 border rounded-xl text-[9px] font-black uppercase tracking-widest transition-all shadow-xl ${isDiagnosing ? 'bg-blue-600 text-white animate-pulse' : 'bg-slate-900 hover:bg-slate-800 border-slate-800/50 text-slate-500 hover:text-slate-300'}`}
+            className={`w-full mt-6 py-4 border rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-900 ${isDiagnosing ? 'bg-blue-600 text-white animate-pulse' : 'bg-slate-900 hover:bg-slate-800 border-slate-800/50 text-slate-300 hover:text-white'}`}
             aria-label="Run infrastructure diagnostics"
             aria-busy={isDiagnosing}
            >
@@ -266,12 +266,12 @@ const StatCard: React.FC<StatCardProps> = ({ label, value, color }) => {
     blue: 'text-blue-500',
     amber: 'text-amber-500',
     emerald: 'text-emerald-500',
-    slate: 'text-slate-500'
+    slate: 'text-slate-400'
   };
   return (
     <div className="bg-[#121216] p-5 rounded-xl border border-slate-800/40 shadow-lg group hover:border-blue-500/20 transition-all">
-      <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-1">{label}</p>
-      <p className={`text-xl font-black tracking-tight ${colorMap[color]}`}>{value}</p>
+      <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
+      <p className={`text-2xl font-black tracking-tight ${colorMap[color]}`}>{value}</p>
     </div>
   );
 };

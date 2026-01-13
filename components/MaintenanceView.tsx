@@ -2,9 +2,9 @@
 import React, { useState } from 'react';
 import { Icons } from '../constants';
 import { loggingService } from '../services/loggingService';
-import { stateService } from '../services/stateService';
 import { Operation } from '../types';
 import { encryptPassword, decryptPassword } from '../utils/cryptoUtils';
+import { useMaintenance } from '../src/presentation/hooks';
 
 interface MaintenanceViewProps {
   isAirGap: boolean;
@@ -40,7 +40,7 @@ const validateSAPassword = (password: string): { valid: boolean; error?: string 
   const hasLowercase = /[a-z]/.test(password);
   const hasUppercase = /[A-Z]/.test(password);
   const hasNumber = /[0-9]/.test(password);
-  const hasSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+  const hasSpecial = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password);
 
   if (!hasLowercase) {
     return { valid: false, error: 'SA password must contain at least one lowercase letter' };
@@ -151,6 +151,7 @@ const MaintenanceView: React.FC<MaintenanceViewProps> = ({ isAirGap }) => {
   const [vaultPassword, setVaultPassword] = useState('');
   const [pendingOp, setPendingOp] = useState<{op: Operation, params: Record<string, string | number>} | null>(null);
   const [isLoadingPassword, setIsLoadingPassword] = useState(false);
+  const { reindexDatabase, performCleanup, isReindexing, isCleaning } = useMaintenance();
 
   const categories = ['All', 'Deployment', 'Maintenance', 'Recovery'];
 
@@ -255,9 +256,9 @@ const MaintenanceView: React.FC<MaintenanceViewProps> = ({ isAirGap }) => {
       if (op.id === 'reindex') {
         loggingService.info(`[SQL] Analyzing SUSDB index fragmentation...`);
         const saPassword = await getVaultedPassword();
-        await stateService.reindexDatabase(saPassword || undefined);
+        await reindexDatabase(saPassword || undefined);
       } else if (op.id === 'cleanup' || op.id === 'monthly') {
-        await stateService.performCleanup();
+        await performCleanup();
       } else if (op.id === 'install-sql-express') {
         await executeSqlExpressInstall(sanitizedParams);
       } else if (op.id === 'install-ssms') {
@@ -506,11 +507,11 @@ const MaintenanceView: React.FC<MaintenanceViewProps> = ({ isAirGap }) => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 bg-slate-900/40 border border-slate-800/40 rounded-2xl shadow-inner">
          <div>
             <h2 className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-3">Runspace Operations</h2>
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Managed pipeline for SUSDB lifecycle</p>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Managed pipeline for SUSDB lifecycle</p>
          </div>
          <div className="flex items-center gap-1 p-1 bg-black/40 border border-slate-800 rounded-xl">
             {categories.map(cat => (
-              <button key={cat} onClick={() => setActiveCategory(cat)} className={`px-5 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeCategory === cat ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>
+              <button key={cat} onClick={() => setActiveCategory(cat)} className={`px-5 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${activeCategory === cat ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-300 hover:text-white hover:bg-slate-800/40'}`}>
                 {cat}
               </button>
             ))}
@@ -522,14 +523,14 @@ const MaintenanceView: React.FC<MaintenanceViewProps> = ({ isAirGap }) => {
           <div key={op.id} className="panel-card p-6 rounded-2xl border-l-2 border-l-slate-800 hover:border-l-blue-600 transition-all flex flex-col justify-between group min-h-[220px] bg-[#121216]/50 shadow-lg">
             <div>
                <h3 className="text-base font-black text-white tracking-tight">{op.name}</h3>
-               <p className="text-[11px] text-slate-500 mt-2 leading-relaxed font-medium">{op.description}</p>
+               <p className="text-sm text-slate-400 mt-2 leading-relaxed font-medium">{op.description}</p>
             </div>
             <div className="mt-8 flex items-center justify-between pt-4 border-t border-slate-800/30">
-               <span className="text-[10px] mono text-slate-600 font-bold">{op.script}</span>
+               <span className="text-xs mono text-slate-400 font-bold">{op.script}</span>
                <button 
                 disabled={!!runningAction}
                 onClick={() => handleInvoke(op)}
-                className={`px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${runningAction === op.id ? 'bg-amber-600 text-white animate-pulse' : 'bg-slate-900 text-slate-400 hover:bg-white hover:text-black'}`}
+                className={`px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${runningAction === op.id ? 'bg-amber-600 text-white animate-pulse' : 'bg-slate-900 text-slate-300 hover:bg-white hover:text-black'}`}
                >
                  {runningAction === op.id ? 'Running' : 'Invoke'}
                </button>
@@ -545,7 +546,7 @@ const MaintenanceView: React.FC<MaintenanceViewProps> = ({ isAirGap }) => {
                   <div className="p-8 border-b border-slate-800 flex justify-between items-center">
                       <div>
                           <h3 className="text-lg font-black text-white uppercase tracking-tight">{wizardOp.name}</h3>
-                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Configure Command Parameters</p>
+                          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Configure Command Parameters</p>
                       </div>
                       <button onClick={() => setWizardOp(null)} className="text-slate-500 hover:text-white transition-all">
                           <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
@@ -554,38 +555,122 @@ const MaintenanceView: React.FC<MaintenanceViewProps> = ({ isAirGap }) => {
                   <div className="p-8 space-y-6">
                       {wizardOp.parameters?.map(p => (
                           <div key={p.id} className="space-y-2">
-                              <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                              <label htmlFor={p.id} className="block text-xs font-semibold text-white uppercase tracking-widest mb-1">
                                 {p.label}
-                                {(p.id === 'installerPath' || p.id === 'saPassword') && <span className="text-red-500 ml-1">*</span>}
+                                {(p.id === 'installerPath' || p.id === 'saPassword') && <span className="text-rose-500 ml-1">*</span>}
                               </label>
                               {p.type === 'select' ? (
                                   <select 
-                                    className="w-full bg-black/40 border border-slate-800 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-blue-600"
+                                    id={p.id}
+                                    className="w-full bg-black/40 border border-slate-800 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-600"
                                     value={paramValues[p.id]}
                                     onChange={e => setParamValues(v => ({ ...v, [p.id]: e.target.value }))}
                                   >
                                       {p.options?.map(o => <option key={o} value={o}>{o}</option>)}
                                   </select>
                               ) : (
-                                  <input 
-                                    type={p.id === 'saPassword' ? 'password' : (p.type === 'number' ? 'number' : 'text')}
-                                    className="w-full bg-black/40 border border-slate-800 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-blue-600"
-                                    value={paramValues[p.id]}
-                                    onChange={e => setParamValues(v => ({ ...v, [p.id]: e.target.value }))}
-                                    placeholder={
-                                      p.id === 'installerPath' 
-                                        ? 'C:\\Path\\To\\SQLEXPR_x64_ENU.exe or .zip' 
-                                        : p.id === 'saPassword' 
-                                        ? 'Enter SA password (min 15 chars: upper, lower, number, special)' 
-                                        : p.label
-                                    }
-                                    required={p.id === 'installerPath' || p.id === 'saPassword'}
-                                  />
+                                  <>
+                                    <div className="flex gap-2">
+                                      <input 
+                                        id={p.id}
+                                        type={p.id === 'saPassword' ? 'password' : (p.type === 'number' ? 'number' : 'text')}
+                                        className="flex-1 bg-black/40 border border-slate-800 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-600"
+                                        value={paramValues[p.id]}
+                                        onChange={e => setParamValues(v => ({ ...v, [p.id]: e.target.value }))}
+                                        placeholder={
+                                          p.id === 'installerPath' 
+                                            ? 'C:\\Path\\To\\SQLEXPR_x64_ENU.exe or .zip' 
+                                            : p.id === 'saPassword' 
+                                            ? 'Enter SA password (min 15 chars: upper, lower, number, special)' 
+                                            : p.label
+                                        }
+                                        required={p.id === 'installerPath' || p.id === 'saPassword'}
+                                        aria-required={p.id === 'installerPath' || p.id === 'saPassword'}
+                                      />
+                                      {/* File browser for installer files */}
+                                      {p.id === 'installerPath' && (
+                                        <button
+                                          type="button"
+                                          onClick={async () => {
+                                            try {
+                                              if (typeof window !== 'undefined' && (window as any).require) {
+                                                const { ipcRenderer } = (window as any).require('electron');
+                                                const result = await ipcRenderer.invoke('show-open-dialog', {
+                                                  title: 'Select SQL Express Installer',
+                                                  filters: [
+                                                    { name: 'Installer Files', extensions: ['exe', 'zip'] },
+                                                    { name: 'All Files', extensions: ['*'] }
+                                                  ],
+                                                  properties: ['openFile']
+                                                });
+                                                
+                                                if (!result.canceled && result.filePaths.length > 0) {
+                                                  setParamValues(v => ({ ...v, [p.id]: result.filePaths[0] }));
+                                                }
+                                              } else {
+                                                loggingService.warn('[INSTALL] File browser not available. Please enter the installer path manually.');
+                                              }
+                                            } catch (error) {
+                                              loggingService.error(`[INSTALL] Failed to open file dialog: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                                            }
+                                          }}
+                                          className="px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 whitespace-nowrap"
+                                          title="Browse for installer file"
+                                        >
+                                          Browse
+                                        </button>
+                                      )}
+                                      {/* Directory browser for path inputs */}
+                                      {(p.id === 'installPath' || p.id === 'dataPath' || p.id === 'mediaPath') && (
+                                        <button
+                                          type="button"
+                                          onClick={async () => {
+                                            try {
+                                              if (typeof window !== 'undefined' && (window as any).require) {
+                                                const { ipcRenderer } = (window as any).require('electron');
+                                                const dialogTitle = p.id === 'installPath' 
+                                                  ? 'Select Installation Directory'
+                                                  : p.id === 'dataPath'
+                                                  ? 'Select Data Directory'
+                                                  : 'Select Media Drive Directory';
+                                                
+                                                const result = await ipcRenderer.invoke('show-directory-dialog', {
+                                                  title: dialogTitle,
+                                                  properties: ['openDirectory']
+                                                });
+                                                
+                                                if (!result.canceled && result.filePaths.length > 0) {
+                                                  setParamValues(v => ({ ...v, [p.id]: result.filePaths[0] }));
+                                                }
+                                              } else {
+                                                loggingService.warn('[INSTALL] Directory browser not available. Please enter the path manually.');
+                                              }
+                                            } catch (error) {
+                                              loggingService.error(`[INSTALL] Failed to open directory dialog: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                                            }
+                                          }}
+                                          className="px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 whitespace-nowrap"
+                                          title={`Browse for ${p.label.toLowerCase()}`}
+                                        >
+                                          Browse
+                                        </button>
+                                      )}
+                                    </div>
+                                    {p.id === 'saPassword' && (
+                                      <p className="text-xs text-slate-400 mt-1">Must be at least 15 characters with uppercase, lowercase, number, and special character</p>
+                                    )}
+                                    {p.id === 'installerPath' && (
+                                      <p className="text-xs text-slate-400 mt-1">Path to SQL Express installer (EXE or ZIP file) - Click Browse to select file</p>
+                                    )}
+                                    {(p.id === 'installPath' || p.id === 'dataPath' || p.id === 'mediaPath') && (
+                                      <p className="text-xs text-slate-400 mt-1">Click Browse to select directory</p>
+                                    )}
+                                  </>
                               )}
                           </div>
                       ))}
                       <div className="pt-4 flex gap-3">
-                          <button onClick={() => setWizardOp(null)} className="flex-1 py-4 text-[10px] font-black uppercase text-slate-600 hover:text-white transition-all">Cancel</button>
+                          <button onClick={() => setWizardOp(null)} className="flex-1 py-4 text-xs font-black uppercase text-slate-400 hover:text-white transition-all focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 rounded-lg">Cancel</button>
                           <button 
                             onClick={() => {
                               // Validate required fields for SQL Express install
@@ -604,7 +689,7 @@ const MaintenanceView: React.FC<MaintenanceViewProps> = ({ isAirGap }) => {
                               }
                               execute(wizardOp, paramValues);
                             }}
-                            className="flex-[2] py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex-[2] py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                             disabled={wizardOp.id === 'install-sql-express' && (!paramValues.installerPath || !paramValues.saPassword || !validateSAPassword(paramValues.saPassword as string).valid)}
                           >
                             Confirm Execution
@@ -625,14 +710,14 @@ const MaintenanceView: React.FC<MaintenanceViewProps> = ({ isAirGap }) => {
                  </div>
                  <div>
                     <h2 className="text-xl font-black text-white uppercase tracking-widest">Vault Authentication</h2>
-                    <p className="text-[10px] font-bold text-slate-500 uppercase mt-2 tracking-widest">Database operations require valid SQL SA credentials.</p>
+                    <p className="text-xs font-bold text-slate-400 uppercase mt-2 tracking-widest">Database operations require valid SQL SA credentials.</p>
                  </div>
                  <input 
                     type="password" 
                     autoFocus 
                     placeholder="ENTER SQL 'sa' PASSWORD"
                     maxLength={MAX_PASSWORD_LENGTH}
-                    className="w-full bg-black/40 border border-slate-800 rounded-2xl px-6 py-5 text-sm font-black text-white focus:outline-none focus:border-blue-600 text-center tracking-[0.4em]"
+                    className="w-full bg-black/40 border border-slate-800 rounded-2xl px-6 py-5 text-sm font-black text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-600 text-center tracking-[0.4em]"
                     value={vaultPassword} 
                     onChange={e => {
                       if (e.target.value.length <= MAX_PASSWORD_LENGTH) {
@@ -650,7 +735,7 @@ const MaintenanceView: React.FC<MaintenanceViewProps> = ({ isAirGap }) => {
                         setVaultPassword('');
                         setPendingOp(null);
                       }} 
-                      className="flex-1 py-4 text-[11px] font-black uppercase text-slate-600 hover:text-white transition-colors"
+                      className="flex-1 py-4 text-xs font-black uppercase text-slate-400 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 rounded-lg"
                       aria-label="Discard password entry"
                     >
                       Discard
@@ -658,7 +743,7 @@ const MaintenanceView: React.FC<MaintenanceViewProps> = ({ isAirGap }) => {
                     <button 
                       onClick={saveVault} 
                       disabled={isLoadingPassword || !vaultPassword}
-                      className="flex-2 py-4 bg-blue-600 text-white rounded-2xl text-[11px] font-black uppercase disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-500 transition-colors"
+                      className="flex-2 py-4 bg-blue-600 text-white rounded-2xl text-xs font-black uppercase disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-500 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                       aria-label="Save password securely"
                     >
                       {isLoadingPassword ? 'Encrypting...' : 'Secure Session'}

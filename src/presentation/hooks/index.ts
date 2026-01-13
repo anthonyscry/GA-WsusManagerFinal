@@ -4,3 +4,5 @@ export { useMaintenance } from './useMaintenance';
 export { useJobs } from './useJobs';
 export { useTerminalCommand } from './useTerminalCommand';
 export { useScheduledTasks } from './useScheduledTasks';
+export { useStats } from './useStats';
+export { useComputers } from './useComputers';

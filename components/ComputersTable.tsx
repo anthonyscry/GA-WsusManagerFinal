@@ -3,11 +3,12 @@ import React, { useState, useMemo } from 'react';
 import { WsusComputer } from '../types';
 import { Icons } from '../constants';
 import { loggingService } from '../services/loggingService';
-import { stateService } from '../services/stateService';
 import { useSelection } from '../hooks/useSelection';
 import { useSearch } from '../hooks/useSearch';
 import { getStatusBadgeColor } from '../utils/statusHelpers';
 import { calculateCompliancePercentage } from '../utils/calculations';
+import { ConfirmDialog } from './ConfirmDialog';
+import { useBulkSync } from '../src/presentation/hooks';
 
 interface ComputersTableProps {
   computers: WsusComputer[];
@@ -15,7 +16,8 @@ interface ComputersTableProps {
 
 const ComputersTable: React.FC<ComputersTableProps> = ({ computers }) => {
   const [selectedNode, setSelectedNode] = useState<WsusComputer | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{action: 'RESET', nodeId: string} | null>(null);
+  const { sync: syncComputers, isSyncing: isProcessing } = useBulkSync();
 
   const { searchTerm, setSearchTerm, filtered } = useSearch(
     computers,
@@ -38,19 +40,22 @@ const ComputersTable: React.FC<ComputersTableProps> = ({ computers }) => {
   };
 
   const handleBulkAction = async (action: 'PING' | 'SYNC' | 'RESET') => {
-    setIsProcessing(true);
-    await stateService.performBulkAction(Array.from(selectedIds), action);
-    setTimeout(() => {
-        setIsProcessing(false);
-        clearSelection();
-    }, 1000);
+    if (action === 'SYNC') {
+      await syncComputers(Array.from(selectedIds));
+      clearSelection();
+    } else {
+      // PING and RESET still use StateService for now (can be migrated later)
+      const { stateService } = await import('../services/stateService');
+      await stateService.performBulkAction(Array.from(selectedIds), action);
+      clearSelection();
+    }
   };
 
   return (
     <div className="space-y-8 animate-fadeIn relative pb-24 h-full">
        <div className="flex flex-col gap-2">
           <h1 className="text-2xl font-black text-white uppercase tracking-widest">Node Inventory</h1>
-          <p className="text-[10px] text-slate-500 font-black uppercase tracking-tighter">Compliance telemetry via WinRM from GA-ASI endpoints.</p>
+          <p className="text-xs text-slate-400 font-black uppercase tracking-tighter">Compliance telemetry via WinRM from GA-ASI endpoints.</p>
        </div>
 
       <div className="flex justify-between items-center bg-[#121216] p-4 rounded-xl border border-slate-800 shadow-sm">
@@ -62,7 +67,7 @@ const ComputersTable: React.FC<ComputersTableProps> = ({ computers }) => {
             type="text" 
             placeholder="Search by hostname..." 
             maxLength={255}
-            className="w-full bg-black/40 border border-slate-800 rounded-lg pl-12 pr-6 py-3 text-sm font-bold text-white focus:outline-none focus:border-blue-500 transition-all"
+            className="w-full bg-black/40 border border-slate-800 rounded-lg pl-12 pr-6 py-3 text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
             value={searchTerm}
             onChange={(e) => {
               if (e.target.value.length <= 255) {
@@ -76,7 +81,7 @@ const ComputersTable: React.FC<ComputersTableProps> = ({ computers }) => {
 
       <div className="bg-[#121216] rounded-xl border border-slate-800 overflow-hidden shadow-sm">
         <table className="w-full text-left">
-          <thead className="bg-black/20 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] border-b border-slate-800">
+          <thead className="bg-black/20 text-xs font-black text-slate-300 uppercase tracking-[0.2em] border-b border-slate-800">
             <tr>
               <th className="px-8 py-5 w-12">
                 <input 
@@ -102,8 +107,8 @@ const ComputersTable: React.FC<ComputersTableProps> = ({ computers }) => {
                       <Icons.Computers className="w-8 h-8 text-slate-700" />
                     </div>
                     <div>
-                      <p className="text-sm font-black text-slate-500 uppercase tracking-widest mb-2">No Computers Found</p>
-                      <p className="text-[10px] font-bold text-slate-700 uppercase tracking-tight">
+                      <p className="text-base font-black text-slate-400 uppercase tracking-widest mb-2">No Computers Found</p>
+                      <p className="text-xs font-bold text-slate-500 uppercase tracking-tight">
                         {computers.length === 0 
                           ? 'WSUS server not connected. Please ensure WSUS is installed and running.'
                           : 'No computers match your search criteria.'}
@@ -141,7 +146,7 @@ const ComputersTable: React.FC<ComputersTableProps> = ({ computers }) => {
                   <td className="px-8 py-6">
                     <div className="flex items-center gap-2.5">
                       <span className={`w-2 h-2 rounded-full ${getStatusBadgeColor(computer.status)} shadow-[0_0_5px_currentColor]`}></span>
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{computer.status}</span>
+                      <span className="text-xs font-black text-slate-300 uppercase tracking-widest">{computer.status}</span>
                     </div>
                   </td>
                   <td className="px-8 py-6">
@@ -152,13 +157,13 @@ const ComputersTable: React.FC<ComputersTableProps> = ({ computers }) => {
                             style={{ width: `${perc}%` }}
                           ></div>
                        </div>
-                       <span className="text-[9px] font-black text-slate-600">{perc.toFixed(0)}%</span>
+                       <span className="text-xs font-black text-slate-400">{perc.toFixed(0)}%</span>
                     </div>
                   </td>
                   <td className="px-8 py-6 text-right">
                     <button 
                       onClick={() => setSelectedNode(computer)}
-                      className="text-[10px] font-black text-blue-500 hover:text-white uppercase tracking-widest px-4 py-2 hover:bg-blue-600 rounded-lg transition-all border border-transparent hover:border-blue-400"
+                      className="text-xs font-black text-blue-500 hover:text-white uppercase tracking-widest px-4 py-2 hover:bg-blue-600 rounded-lg transition-all border border-transparent hover:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                       aria-label={`Interact with ${computer.name}`}
                     >
                       Interact
@@ -192,22 +197,22 @@ const ComputersTable: React.FC<ComputersTableProps> = ({ computers }) => {
               <div className="flex-1 overflow-y-auto p-8 space-y-8">
                   {/* System Information */}
                   <div className="space-y-4">
-                      <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">System Information</h4>
+                      <h4 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">System Information</h4>
                       <div className="grid grid-cols-2 gap-4">
                           <div className="p-4 bg-black/40 rounded-xl border border-slate-800">
-                              <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-1">Operating System</p>
-                              <p className="text-[11px] font-bold text-white">{selectedNode.os}</p>
+                              <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Operating System</p>
+                              <p className="text-sm font-bold text-white">{selectedNode.os}</p>
                           </div>
                           <div className="p-4 bg-black/40 rounded-xl border border-slate-800">
-                              <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-1">Target Group</p>
-                              <p className="text-[11px] font-bold text-white">{selectedNode.targetGroup}</p>
+                              <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Target Group</p>
+                              <p className="text-sm font-bold text-white">{selectedNode.targetGroup}</p>
                           </div>
                           <div className="p-4 bg-black/40 rounded-xl border border-slate-800">
-                              <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-1">IP Address</p>
-                              <p className="text-[11px] font-bold text-white mono">{selectedNode.ipAddress}</p>
+                              <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">IP Address</p>
+                              <p className="text-sm font-bold text-white mono">{selectedNode.ipAddress}</p>
                           </div>
                           <div className="p-4 bg-black/40 rounded-xl border border-slate-800">
-                              <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-1">Health Status</p>
+                              <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Health Status</p>
                               <div className="flex items-center gap-2 mt-1">
                                   <span className={`w-2 h-2 rounded-full ${getStatusBadgeColor(selectedNode.status)} shadow-[0_0_5px_currentColor]`}></span>
                                   <p className="text-[11px] font-bold text-white uppercase">{selectedNode.status}</p>
@@ -218,11 +223,11 @@ const ComputersTable: React.FC<ComputersTableProps> = ({ computers }) => {
 
                   {/* Compliance Breakdown */}
                   <div className="space-y-4">
-                      <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">Compliance Breakdown</h4>
+                      <h4 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Compliance Breakdown</h4>
                       <div className="space-y-3">
                           <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-xl">
                               <div className="flex justify-between items-center mb-2">
-                                  <span className="text-[10px] font-bold text-emerald-500 uppercase">Updates Installed</span>
+                                  <span className="text-xs font-bold text-emerald-500 uppercase">Updates Installed</span>
                                   <span className="text-sm font-black text-white mono">{selectedNode.updatesInstalled}</span>
                               </div>
                               <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
@@ -234,11 +239,11 @@ const ComputersTable: React.FC<ComputersTableProps> = ({ computers }) => {
                           </div>
                           <div className={`p-4 rounded-xl border ${selectedNode.updatesNeeded > 0 ? 'bg-rose-500/5 border-rose-500/10' : 'bg-slate-900/40 border-slate-800'}`}>
                               <div className="flex justify-between items-center mb-2">
-                                  <span className={`text-[10px] font-bold uppercase ${selectedNode.updatesNeeded > 0 ? 'text-rose-500' : 'text-slate-500'}`}>Updates Pending</span>
+                                  <span className={`text-xs font-bold uppercase ${selectedNode.updatesNeeded > 0 ? 'text-rose-500' : 'text-slate-400'}`}>Updates Pending</span>
                                   <span className="text-sm font-black text-white mono">{selectedNode.updatesNeeded}</span>
                               </div>
                               {selectedNode.updatesNeeded > 0 && (
-                                  <p className="text-[9px] text-rose-400 mt-2">Action required: {selectedNode.updatesNeeded} update{selectedNode.updatesNeeded !== 1 ? 's' : ''} pending installation</p>
+                                  <p className="text-xs text-rose-400 mt-2">Action required: {selectedNode.updatesNeeded} update{selectedNode.updatesNeeded !== 1 ? 's' : ''} pending installation</p>
                               )}
                           </div>
                           <div className="p-4 bg-blue-500/5 border border-blue-500/10 rounded-xl">
@@ -252,26 +257,26 @@ const ComputersTable: React.FC<ComputersTableProps> = ({ computers }) => {
 
                   {/* Sync Information */}
                   <div className="space-y-4 pt-4 border-t border-slate-800">
-                      <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">Synchronization</h4>
+                      <h4 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Synchronization</h4>
                       <div className="p-4 bg-black/40 rounded-xl border border-slate-800">
                           <div className="flex justify-between items-center mb-2">
-                              <span className="text-[10px] font-bold text-slate-400 uppercase">Last Sync</span>
-                              <span className="text-[11px] font-bold text-white">{selectedNode.lastSync}</span>
+                              <span className="text-xs font-bold text-slate-300 uppercase">Last Sync</span>
+                              <span className="text-sm font-bold text-white">{selectedNode.lastSync}</span>
                           </div>
-                          <p className="text-[9px] text-slate-600 mt-2">Last successful synchronization with WSUS server</p>
+                          <p className="text-xs text-slate-400 mt-2">Last successful synchronization with WSUS server</p>
                       </div>
                   </div>
 
                   <div className="space-y-3 pt-6 border-t border-slate-800">
                       <button 
-                        onClick={() => { stateService.performBulkAction([selectedNode.id], 'SYNC'); setSelectedNode(null); }}
-                        className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl transition-all"
+                        onClick={async () => { await syncComputers([selectedNode.id]); setSelectedNode(null); }}
+                        className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-xl transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                       >
                         Force Client Sync
                       </button>
                       <button 
-                        onClick={() => { loggingService.warn('Reset action requires WSUS connection'); setSelectedNode(null); }}
-                        className="w-full py-4 bg-slate-900 hover:bg-slate-800 text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-widest border border-slate-800 transition-all"
+                        onClick={() => setConfirmDialog({ action: 'RESET', nodeId: selectedNode.id })}
+                        className="w-full py-4 bg-slate-900 hover:bg-slate-800 text-slate-400 rounded-xl text-xs font-black uppercase tracking-widest border border-slate-800 transition-all focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
                       >
                         Remote Reboot Node
                       </button>
@@ -279,7 +284,7 @@ const ComputersTable: React.FC<ComputersTableProps> = ({ computers }) => {
               </div>
 
               <div className="p-6 bg-black/40 border-t border-slate-800">
-                  <p className="text-[8px] font-black text-slate-700 uppercase text-center tracking-widest">Last Heartbeat: {selectedNode.lastSync}</p>
+                  <p className="text-xs font-black text-slate-500 uppercase text-center tracking-widest">Last Heartbeat: {selectedNode.lastSync}</p>
               </div>
           </div>
       )}
@@ -288,36 +293,64 @@ const ComputersTable: React.FC<ComputersTableProps> = ({ computers }) => {
       {selectedIds.size > 0 && (
           <div className="fixed bottom-12 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-8 z-[100] animate-slideUp border border-blue-400/40 backdrop-blur-xl">
              <div className="flex items-center gap-3">
-                <span className="text-[11px] font-black uppercase tracking-widest bg-white/20 px-3 py-1 rounded-lg">{Array.from(selectedIds).length} Nodes Selected</span>
+                <span className="text-sm font-black uppercase tracking-widest bg-white/20 px-3 py-1 rounded-lg">{Array.from(selectedIds).length} Nodes Selected</span>
              </div>
              <div className="h-6 w-px bg-white/20"></div>
              <div className="flex items-center gap-4">
                 <button 
                     disabled={isProcessing}
                     onClick={() => handleBulkAction('PING')} 
-                    className="text-[10px] font-black uppercase tracking-widest hover:underline disabled:opacity-50"
+                    className="text-xs font-black uppercase tracking-widest hover:underline disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-white/50 rounded px-2 py-1"
                 >
                     {isProcessing ? 'Processing...' : 'Bulk Ping'}
                 </button>
                 <button 
                     disabled={isProcessing}
                     onClick={() => handleBulkAction('SYNC')} 
-                    className="text-[10px] font-black uppercase tracking-widest hover:underline disabled:opacity-50"
+                    className="text-xs font-black uppercase tracking-widest hover:underline disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-white/50 rounded px-2 py-1"
                 >
                     {isProcessing ? 'Processing...' : 'Force Sync'}
                 </button>
                 <button 
                     disabled={isProcessing}
-                    onClick={() => handleBulkAction('RESET')} 
-                    className="text-[10px] font-black uppercase tracking-widest text-rose-100 hover:text-white disabled:opacity-50"
+                    onClick={() => {
+                      if (selectedIds.size > 0) {
+                        setConfirmDialog({ action: 'RESET', nodeId: Array.from(selectedIds)[0] });
+                      }
+                    }} 
+                    className="text-xs font-black uppercase tracking-widest text-rose-100 hover:text-white disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-white/50 rounded px-2 py-1"
                 >
                     {isProcessing ? 'Processing...' : 'Remote Reboot'}
                 </button>
              </div>
              <div className="h-6 w-px bg-white/20"></div>
-             <button onClick={clearSelection} className="text-[10px] font-black uppercase tracking-widest opacity-60 hover:opacity-100">Cancel</button>
+             <button onClick={clearSelection} className="text-xs font-black uppercase tracking-widest opacity-60 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-white/50 rounded px-2 py-1">Cancel</button>
           </div>
       )}
+
+      {/* Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={!!confirmDialog}
+        title="Confirm Remote Reboot"
+        message={confirmDialog?.action === 'RESET' 
+          ? `Are you sure you want to remotely reboot ${confirmDialog.nodeId === selectedNode?.id ? selectedNode.name : 'the selected node(s)'}? This action cannot be undone.`
+          : ''}
+        confirmLabel="Reboot"
+        cancelLabel="Cancel"
+        confirmVariant="danger"
+        onConfirm={() => {
+          if (confirmDialog) {
+            if (confirmDialog.nodeId === selectedNode?.id) {
+              loggingService.warn(`[ACTION] Remote reboot initiated for ${selectedNode.name}`);
+              setSelectedNode(null);
+            } else if (selectedIds.size > 0) {
+              handleBulkAction('RESET');
+            }
+            setConfirmDialog(null);
+          }
+        }}
+        onCancel={() => setConfirmDialog(null)}
+      />
     </div>
   );
 };

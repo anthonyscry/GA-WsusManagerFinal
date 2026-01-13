@@ -1,3 +1,16 @@
+/**
+ * @deprecated StateService is deprecated. Use the new architecture hooks instead:
+ * - useStats() - for environment statistics
+ * - useComputers() - for computer inventory
+ * - useJobs() - for background jobs
+ * - useRefreshTelemetry() - for refreshing data
+ * - useBulkSync() - for bulk computer operations
+ * - useMaintenance() - for maintenance operations
+ * - useScheduledTasks() - for scheduled tasks
+ * - useTerminalCommand() - for terminal commands
+ * 
+ * See docs/refactoring/MIGRATION_GUIDE.md for migration instructions.
+ */
 
 import { EnvironmentStats, WsusComputer, HealthStatus, ScheduledTask, StigCheck } from '../types';
 import { loggingService } from './loggingService';
@@ -208,19 +221,24 @@ class StateService {
 
   /**
    * Automatically set air-gap mode based on internet connectivity
+   * Fully automatic: switches to air-gap when offline, cloud-sync when online
    */
   setAirGapFromConnectivity(isOnline: boolean) {
-    // If offline, force air-gap mode
-    // If online, allow user preference (don't force cloud-sync)
     if (!isOnline) {
+      // Offline: automatically switch to air-gap mode
       if (!this.airGap) {
         loggingService.warn('[SYSTEM] Internet connection lost - automatically switching to AIR-GAP mode');
         this.airGap = true;
         this.notify();
       }
+    } else {
+      // Online: automatically switch to cloud-sync mode
+      if (this.airGap) {
+        loggingService.info('[SYSTEM] Internet connection detected - automatically switching to CLOUD-SYNC mode');
+        this.airGap = false;
+        this.notify();
+      }
     }
-    // If online, we don't automatically switch to cloud-sync
-    // User can manually toggle if they want
   }
 
   /**

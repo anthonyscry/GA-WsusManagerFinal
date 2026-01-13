@@ -13,7 +13,7 @@ const CONNECTIVITY_CHECK_URLS = [
 
 let connectivityCheckInterval: NodeJS.Timeout | null = null;
 let lastKnownStatus: boolean = true;
-let connectivityListeners: Set<(isOnline: boolean) => void> = new Set();
+const connectivityListeners: Set<(isOnline: boolean) => void> = new Set();
 
 /**
  * Check if internet connection is available

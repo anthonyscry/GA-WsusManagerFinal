@@ -1,0 +1,33 @@
+# Example override file for custom configurations
+# Copy this to docker-compose.override.yml to customize settings
+# Override files are automatically merged by docker-compose
+
+version: '3.8'
+
+services:
+  sqlserver:
+    # Override SQL Server password (use environment variable for security)
+    environment:
+      - MSSQL_SA_PASSWORD=${SQL_SA_PASSWORD:-WSUS_Admin123!}
+    
+    # Change port mapping if 1433 is already in use
+    ports:
+      - "14330:1433"  # Use non-standard port
+    
+    # Add custom SQL Server configuration
+    command:
+      - /opt/mssql/bin/sqlservr
+      - -e
+      - -d/var/opt/mssql/data/master.mdf
+      - -l/var/opt/mssql/data/mastlog.ldf
+      - -C
+    
+    # Resource limits (adjust based on your system)
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G

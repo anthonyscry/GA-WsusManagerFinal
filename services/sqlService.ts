@@ -25,8 +25,13 @@ class SqlService {
 
   constructor() {
     // Use environment variables with fallback
+    // Support both formats: "localhost,1433" (Docker) and "localhost\SQLEXPRESS" (local)
     this.serverInstance = process.env.SQL_SERVER_INSTANCE || 
-      (process.env.NODE_ENV === 'production' ? 'PROD-SERVER\\SQLINSTANCE' : 'localhost\\SQLEXPRESS');
+      (process.env.NODE_ENV === 'production' 
+        ? 'PROD-SERVER\\SQLINSTANCE' 
+        : process.env.DOCKER_ENV === 'true' 
+          ? 'localhost,1433'  // Docker format
+          : 'localhost\\SQLEXPRESS');  // Local SQL Express format
     this.databaseName = process.env.WSUS_DATABASE_NAME || 'SUSDB';
     
     if (!this.serverInstance) {

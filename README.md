@@ -56,6 +56,52 @@ This project includes comprehensive debugging documentation and tools:
 
 For debugging issues, start with the **Quick Reference** guide, then use the **Runbook** for detailed methodology.
 
+## 🐳 Lab Environment Setup
+
+For testing this application in a complete lab environment with WSUS and SQL Server, see the [Docker Lab Environment Setup](./docker/README.md) documentation.
+
+### Quick Start with Docker
+
+**Automated Setup (Recommended):**
+```powershell
+# Full automated setup (checks Docker, starts containers, tests connection)
+npm run docker:setup
+
+# Or check Docker installation only
+npm run docker:setup:check
+```
+
+**Manual Setup:**
+```powershell
+# Start SQL Server container
+npm run docker:start
+
+# Test connection
+npm run test:docker
+
+# View logs
+npm run docker:logs
+```
+
+**Available Docker Commands:**
+- `npm run docker:setup` - Full automated setup (checks Docker, starts container, initializes database)
+- `npm run docker:setup:check` - Check Docker installation
+- `npm run docker:start` - Start SQL Server container
+- `npm run docker:start:init` - Start container and initialize database (recommended)
+- `npm run docker:init` - Initialize SUSDB database (run after container starts)
+- `npm run docker:stop` - Stop containers
+- `npm run docker:restart` - Restart container
+- `npm run docker:status` - Show container status
+- `npm run docker:logs` - View container logs
+- `npm run docker:test` - Start, initialize, and test connection
+- `npm run docker:test:app` - Comprehensive integration test
+- `npm run test:docker` - Test SQL connection only
+- `npm run docker:down` - Stop and remove containers
+- `npm run docker:clean` - Remove containers and volumes (⚠️ deletes data)
+- `npm run docker:validate` - Validate Docker configuration
+
+See [docker/SETUP_COMPLETE.md](./docker/SETUP_COMPLETE.md) for complete setup documentation.
+
 ## 📚 Documentation
 
 All project documentation is organized in the [`docs/`](./docs/) directory:

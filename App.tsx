@@ -10,9 +10,12 @@ import AuditView from './components/AuditView';
 import AboutView from './components/AboutView';
 import JobOverlay from './components/JobOverlay';
 import ErrorBoundary from './components/ErrorBoundary';
+import { ToastContainer } from './components/Toast';
+import { useToast } from './hooks/useToast';
 import { stateService } from './services/stateService';
 import { loggingService } from './services/loggingService';
 import { startConnectivityMonitoring, stopConnectivityMonitoring, checkConnectivityOnce } from './utils/connectivityChecker';
+import { useStats, useComputers, useJobs, useRefreshTelemetry, useTerminalCommand } from './src/presentation/hooks';
 
 const REFRESH_INTERVAL_SECONDS = 30;
 const MAX_TERMINAL_INPUT_LENGTH = 1000;
@@ -28,28 +31,29 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'computers' | 'maintenance' | 'automation' | 'logs' | 'audit' | 'help'>('dashboard');
   const [isAirGap, setIsAirGap] = useState(stateService.isAirGap());
   const [refreshTimer, setRefreshTimer] = useState(REFRESH_INTERVAL_SECONDS);
-  const [stats, setStats] = useState(stateService.getStats());
-  const [computers, setComputers] = useState(stateService.getComputers());
-  const [jobs, setJobs] = useState(stateService.getJobs());
   const [showTerminal, setShowTerminal] = useState(false);
   const [terminalInput, setTerminalInput] = useState('');
+  const { toasts, removeToast } = useToast();
+  
+  // Use new architecture hooks
+  const { stats } = useStats();
+  const { computers } = useComputers();
+  const { jobs } = useJobs();
+  const { refresh: refreshTelemetry } = useRefreshTelemetry();
+  const { execute: executeTerminalCommand } = useTerminalCommand();
 
   useEffect(() => {
     loggingService.info('GA-WsusManager Command Center v3.9.0 Initialized');
-    
+
+    // Subscribe to StateService for air gap mode changes (temporary - will be migrated later)
     const unsubscribe = stateService.subscribe(() => {
-      setStats({ ...stateService.getStats() });
-      setComputers([...stateService.getComputers()]);
-      setJobs([...stateService.getJobs()]);
       setIsAirGap(stateService.isAirGap());
     });
 
-    // Check connectivity on startup and set air-gap mode if offline
+    // Check connectivity on startup and set mode automatically
     checkConnectivityOnce().then(isOnline => {
-      if (!isOnline) {
-        loggingService.warn('[SYSTEM] No internet connection detected - automatically enabling AIR-GAP mode');
-        stateService.setAirGapFromConnectivity(false);
-      }
+      loggingService.info(`[SYSTEM] Initial connectivity check: ${isOnline ? 'ONLINE' : 'OFFLINE'}`);
+      stateService.setAirGapFromConnectivity(isOnline);
     });
 
     // Start connectivity monitoring
@@ -58,10 +62,11 @@ const App: React.FC = () => {
     };
     startConnectivityMonitoring(handleConnectivityChange);
 
+    // Auto-refresh timer using new architecture
     const timer = setInterval(() => {
       setRefreshTimer(prev => {
         if (prev <= 1) {
-          stateService.refreshTelemetry().catch(err => {
+          refreshTelemetry().catch(err => {
             const errorMessage = err instanceof Error ? err.message : 'Unknown error';
             loggingService.error(`Failed to refresh telemetry: ${errorMessage}`);
           });
@@ -76,28 +81,30 @@ const App: React.FC = () => {
       clearInterval(timer);
       stopConnectivityMonitoring(handleConnectivityChange);
     };
-  }, []);
+  }, [refreshTelemetry]);
 
-  const handleCommand = (e: React.FormEvent) => {
+  const handleCommand = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!terminalInput) return;
-    stateService.processTerminalCommand(terminalInput);
+    await executeTerminalCommand(terminalInput);
     setTerminalInput('');
   };
 
   const toggleMode = async () => {
-    // Before allowing toggle to cloud-sync, check if we have internet
+    // Manual override - temporarily disable automatic switching
+    // Note: Automatic switching will resume on next connectivity check
     if (!isAirGap) {
-      // Switching to air-gap - always allowed
+      // Manually switching to air-gap
+      loggingService.info('[SYSTEM] Manual override: Switching to AIR-GAP mode');
       stateService.setAirGap(true);
     } else {
-      // Switching to cloud-sync - check connectivity first
+      // Manually switching to cloud-sync - check connectivity first
       const isOnline = await checkConnectivityOnce();
       if (!isOnline) {
         loggingService.warn('[SYSTEM] Cannot switch to Cloud-Sync mode - no internet connection detected');
-        // Optionally show a user notification here
         return;
       }
+      loggingService.info('[SYSTEM] Manual override: Switching to CLOUD-SYNC mode');
       stateService.setAirGap(false);
     }
   };
@@ -112,7 +119,7 @@ const App: React.FC = () => {
           </div>
           <div className="leading-tight">
             <span className="text-sm font-black tracking-widest text-white block uppercase mono">WSUS_PRO</span>
-            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tighter">Lab Console</span>
+            <span className="text-xs font-bold text-slate-300 uppercase tracking-tighter">Lab Console</span>
           </div>
         </div>
 
@@ -133,7 +140,7 @@ const App: React.FC = () => {
         >
           <div className="flex items-center gap-3">
             <div className={`w-1.5 h-1.5 rounded-full ${showTerminal ? 'bg-blue-400' : 'bg-slate-700'}`}></div>
-            <span className="text-[10px] font-black uppercase tracking-widest">Live Terminal</span>
+            <span className="text-xs font-black uppercase tracking-widest">Live Terminal</span>
           </div>
           <Icons.Logs className="w-4 h-4" />
         </button>
@@ -141,26 +148,28 @@ const App: React.FC = () => {
 
       <main className="flex-1 flex flex-col overflow-hidden relative">
         <header className="h-16 bg-[#121216]/60 backdrop-blur-lg border-b border-slate-800/40 px-8 flex items-center justify-between z-40">
-          <h1 className="text-xs font-black text-white uppercase tracking-[0.4em]">{activeTab}</h1>
+          <h1 className="text-sm font-black text-white uppercase tracking-[0.4em]">{activeTab}</h1>
           <div className="flex items-center gap-8">
-             {/* Connection Mode Switcher */}
+             {/* Connection Mode Switcher - Automatic */}
              <div className="flex items-center gap-4 px-4 py-2 bg-black/40 rounded-xl border border-slate-800">
-                <span className={`text-[8px] font-black uppercase tracking-widest transition-colors ${isAirGap ? 'text-blue-500' : 'text-slate-600'}`}>Air-Gap</span>
+                <span className={`text-xs font-black uppercase tracking-widest transition-colors ${isAirGap ? 'text-blue-500' : 'text-slate-400'}`}>Air-Gap</span>
                 <button 
                   onClick={toggleMode}
-                  className={`w-10 h-5 rounded-full relative transition-colors ${isAirGap ? 'bg-slate-800' : 'bg-blue-600'}`}
-                  title={isAirGap ? 'Click to switch to Cloud-Sync (requires internet)' : 'Click to switch to Air-Gap mode'}
+                  className={`w-10 h-5 rounded-full relative transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-black/40 ${isAirGap ? 'bg-slate-800' : 'bg-blue-600'}`}
+                  title="Auto mode: Switches based on connectivity. Click for manual override."
+                  aria-label="Toggle connection mode"
                 >
                   <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${isAirGap ? 'left-1' : 'left-6 shadow-[0_0_8px_white]'}`}></div>
                 </button>
-                <span className={`text-[8px] font-black uppercase tracking-widest transition-colors ${!isAirGap ? 'text-blue-500' : 'text-slate-600'}`}>Cloud-Sync</span>
+                <span className={`text-xs font-black uppercase tracking-widest transition-colors ${!isAirGap ? 'text-blue-500' : 'text-slate-400'}`}>Cloud-Sync</span>
+                <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-tighter ml-1" title="Automatic mode enabled">AUTO</span>
              </div>
 
              <div className="h-6 w-px bg-slate-800"></div>
 
              <div className="flex flex-col items-end">
-                <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest">Cycle</span>
-                <span className="text-[11px] font-black text-blue-500 mono">{refreshTimer}s</span>
+                <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Cycle</span>
+                <span className="text-sm font-black text-blue-500 mono">{refreshTimer}s</span>
              </div>
           </div>
         </header>
@@ -214,6 +223,7 @@ const App: React.FC = () => {
       </main>
 
       <JobOverlay jobs={jobs} />
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
       </div>
     </ErrorBoundary>
   );
@@ -222,7 +232,7 @@ const App: React.FC = () => {
 const NavItem: React.FC<NavItemProps> = ({ active, onClick, icon, label }) => (
   <button 
     onClick={onClick} 
-    className={`w-full flex items-center gap-4 px-5 py-3.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${active ? 'bg-blue-600 text-white shadow-xl translate-x-1' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900/40'}`}
+    className={`w-full flex items-center gap-4 px-5 py-3.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-900 ${active ? 'bg-blue-600 text-white shadow-xl translate-x-1' : 'text-slate-300 hover:text-white hover:bg-slate-900/40'}`}
     aria-label={`Navigate to ${label}`}
     aria-current={active ? 'page' : undefined}
   >

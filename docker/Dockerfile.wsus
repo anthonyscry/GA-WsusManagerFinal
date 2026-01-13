@@ -1,0 +1,39 @@
+# Dockerfile for Windows Server with WSUS
+# This requires Windows containers and a Windows host
+# Base: Windows Server Core
+FROM mcr.microsoft.com/windows/servercore:ltsc2022
+
+# Set metadata
+LABEL maintainer="GA-ASI WSUS Manager Team"
+LABEL description="Windows Server Container with WSUS for Lab Environment"
+
+# Set PowerShell as default shell
+SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
+
+# Install WSUS Management Tools (PowerShell module)
+# Note: Full WSUS installation in containers is complex and typically requires:
+# 1. Custom Windows Server image with WSUS pre-installed
+# 2. Or installation script run during container build
+# 3. Proper configuration of IIS, SQL Server connection, etc.
+
+# For now, this Dockerfile sets up the PowerShell module
+RUN Install-WindowsFeature -Name UpdateServices-API, UpdateServices-RSAT, UpdateServices-Ui -IncludeManagementTools
+
+# Install WSUS PowerShell module
+RUN Install-Module -Name UpdateServices -Force -AllowClobber -Scope AllUsers
+
+# Create WSUS content directory
+RUN New-Item -ItemType Directory -Path C:\WSUS -Force | Out-Null
+
+# Set working directory
+WORKDIR C:\WSUS
+
+# Expose WSUS ports
+# 8530: HTTP (default)
+# 8531: HTTPS (SSL)
+EXPOSE 8530 8531
+
+# Note: WSUS server configuration must be done after container starts
+# Use docker-compose or run scripts to configure WSUS connection to SQL Server
+# Default command keeps container running
+CMD ["powershell", "-NoExit", "-Command", "Write-Host 'WSUS Container Ready. Configure WSUS using: wsusutil.exe postinstall CONTENT_PATH=C:\\WSUS'"]
