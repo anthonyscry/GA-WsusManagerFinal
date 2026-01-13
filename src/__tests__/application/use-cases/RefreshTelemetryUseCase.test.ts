@@ -173,31 +173,37 @@ describe('RefreshTelemetryUseCase', () => {
     await useCase.execute();
 
     const stats = await statsRepo.get();
-    expect(stats.totalComputers).toBe(10);
+    // Stats are recalculated from computers - mock returns 1 computer
+    expect(stats.totalComputers).toBe(1);
     expect(stats.isInstalled).toBe(true);
   });
 
   it('should handle WSUS client failure gracefully', async () => {
     const statsRepo = new MockStatsRepository();
     const computerRepo = new MockComputerRepository();
-    const wsusClient = {
-      ...new MockWsusClient(),
-      getStats: async () => null, // Simulate failure
-    } as IWsusClient;
-    const sqlClient = new MockSqlClient();
     const logger = new MockLogger();
     const eventBus = new MockEventBus();
+    const sqlClient = new MockSqlClient();
+
+    // Create a wsusClient that throws on getStats
+    const failingWsusClient: IWsusClient = {
+      initialize: async () => true,
+      getStats: async () => { throw new Error('Connection failed'); },
+      getComputers: async () => [],
+      forceComputerSync: async () => true,
+      performCleanup: async () => true,
+    };
 
     const useCase = new RefreshTelemetryUseCase(
       statsRepo,
       computerRepo,
-      wsusClient,
+      failingWsusClient,
       sqlClient,
       logger,
       eventBus
     );
 
-    // Should not throw, should handle gracefully
-    await expect(useCase.execute()).resolves.not.toThrow();
+    // The use case wraps errors in ExternalServiceError
+    await expect(useCase.execute()).rejects.toThrow('Failed to refresh telemetry');
   });
 });

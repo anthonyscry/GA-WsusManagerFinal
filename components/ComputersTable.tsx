@@ -40,14 +40,20 @@ const ComputersTable: React.FC<ComputersTableProps> = ({ computers }) => {
   };
 
   const handleBulkAction = async (action: 'PING' | 'SYNC' | 'RESET') => {
-    if (action === 'SYNC') {
-      await syncComputers(Array.from(selectedIds));
+    try {
+      if (action === 'SYNC') {
+        await syncComputers(Array.from(selectedIds));
+      } else {
+        // PING and RESET still use StateService for now (can be migrated later)
+        const { stateService } = await import('../services/stateService');
+        await stateService.performBulkAction(Array.from(selectedIds), action);
+      }
       clearSelection();
-    } else {
-      // PING and RESET still use StateService for now (can be migrated later)
-      const { stateService } = await import('../services/stateService');
-      await stateService.performBulkAction(Array.from(selectedIds), action);
-      clearSelection();
+      loggingService.info(`[ACTION] Bulk ${action} completed for ${selectedIds.size} node(s)`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      loggingService.error(`[ACTION] Bulk ${action} failed: ${errorMessage}`);
+      // Don't clear selection on failure so user can retry
     }
   };
 
@@ -268,8 +274,17 @@ const ComputersTable: React.FC<ComputersTableProps> = ({ computers }) => {
                   </div>
 
                   <div className="space-y-3 pt-6 border-t border-slate-800">
-                      <button 
-                        onClick={async () => { await syncComputers([selectedNode.id]); setSelectedNode(null); }}
+                      <button
+                        onClick={async () => {
+                          try {
+                            await syncComputers([selectedNode.id]);
+                            loggingService.info(`[ACTION] Sync completed for ${selectedNode.name}`);
+                            setSelectedNode(null);
+                          } catch (error) {
+                            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                            loggingService.error(`[ACTION] Sync failed for ${selectedNode.name}: ${errorMessage}`);
+                          }
+                        }}
                         className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-xl transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                       >
                         Force Client Sync

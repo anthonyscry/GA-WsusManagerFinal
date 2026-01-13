@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info';
 
@@ -7,6 +7,32 @@ export interface Toast {
   message: string;
   type: ToastType;
   duration?: number;
+  title?: string;
+}
+
+// Friendly error messages for common errors
+export const friendlyErrorMessages: Record<string, string> = {
+  'WSUS service not running': 'The WSUS service appears to be stopped. Please start the WSUS service and try again.',
+  'SQL Server connection failed': 'Unable to connect to SQL Server. Please verify the service is running and credentials are correct.',
+  'Network timeout': 'The operation took too long to complete. Please check your network connection and try again.',
+  'Permission denied': 'You don\'t have permission to perform this action. Please run as administrator.',
+  'PowerShell execution failed': 'The PowerShell command failed to execute. Please check the logs for details.',
+  'Command not whitelisted': 'This command is not allowed for security reasons.',
+  'Database operation failed': 'The database operation failed. Please check the SQL Server connection.',
+  'ECONNREFUSED': 'Connection refused. Please verify the target service is running.',
+  'ETIMEDOUT': 'Connection timed out. Please check the network connectivity.',
+  'not available in browser': 'This feature requires the desktop application. Please run GA-WsusManager Pro as a standalone app.',
+  'default': 'An unexpected error occurred. Please check the logs for more details.',
+};
+
+export function getFriendlyError(error: string | Error): string {
+  const errorStr = error instanceof Error ? error.message : error;
+  for (const [key, message] of Object.entries(friendlyErrorMessages)) {
+    if (key !== 'default' && errorStr.toLowerCase().includes(key.toLowerCase())) {
+      return message;
+    }
+  }
+  return friendlyErrorMessages['default'];
 }
 
 interface ToastProps {
@@ -103,3 +129,50 @@ export const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, onRemove
     </div>
   );
 };
+
+/**
+ * Custom hook for managing toast notifications
+ */
+export function useToast() {
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const addToast = useCallback((toast: Omit<Toast, 'id'>) => {
+    const id = `toast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    setToasts((prev) => [...prev, { ...toast, id }]);
+    return id;
+  }, []);
+
+  const removeToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  const success = useCallback((message: string, duration?: number) => {
+    return addToast({ type: 'success', message, duration });
+  }, [addToast]);
+
+  const error = useCallback((message: string, duration?: number) => {
+    // Use friendly error message if available
+    const friendlyMessage = getFriendlyError(message);
+    return addToast({ type: 'error', message: friendlyMessage, duration: duration || 8000 });
+  }, [addToast]);
+
+  const warning = useCallback((message: string, duration?: number) => {
+    return addToast({ type: 'warning', message, duration });
+  }, [addToast]);
+
+  const info = useCallback((message: string, duration?: number) => {
+    return addToast({ type: 'info', message, duration });
+  }, [addToast]);
+
+  return {
+    toasts,
+    addToast,
+    removeToast,
+    success,
+    error,
+    warning,
+    info,
+  };
+}
+
+export default ToastComponent;

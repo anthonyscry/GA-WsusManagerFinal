@@ -72,11 +72,22 @@ class SqlService {
   }
 
   /**
-   * Escape password for PowerShell (never pass in command line)
+   * Escape password for PowerShell string context
+   * SECURITY: Handles all PowerShell special characters that could cause:
+   * - Command injection (backticks, $())
+   * - String escaping ($, ", `)
+   * - Subexpression expansion ($(command))
    */
   private escapePasswordForPowerShell(password: string): string {
-    // Escape single quotes by doubling them
-    return password.replace(/'/g, "''");
+    return password
+      // Escape backticks first (PowerShell escape character)
+      .replace(/`/g, '``')
+      // Escape dollar signs (prevent variable/subexpression expansion)
+      .replace(/\$/g, '`$')
+      // Escape double quotes (we're in a double-quoted string)
+      .replace(/"/g, '`"')
+      // Escape single quotes by doubling them (for nested strings)
+      .replace(/'/g, "''");
   }
 
   /**
@@ -231,17 +242,19 @@ ${query}
   }
 
   /**
-   * Get last backup date
+   * Get last backup date using parameterized query
+   * SECURITY: Uses DB_NAME() function instead of string interpolation
+   * to avoid SQL injection risk
    */
   private async getLastBackupDate(saPassword?: string): Promise<string> {
     try {
-      // Sanitize database name (should only contain alphanumeric, underscore)
-      const safeDatabaseName = this.databaseName.replace(/[^a-zA-Z0-9_]/g, '');
+      // SECURITY: Use DB_NAME() function to get current database name safely
+      // This avoids string interpolation and potential SQL injection
       const query = `
-        SELECT TOP 1 
-          backup_finish_date 
-        FROM msdb.dbo.backupset 
-        WHERE database_name = '${safeDatabaseName}'
+        SELECT TOP 1
+          backup_finish_date
+        FROM msdb.dbo.backupset
+        WHERE database_name = DB_NAME()
         ORDER BY backup_finish_date DESC
       `;
 
@@ -249,8 +262,8 @@ ${query}
       if (results.length > 0 && results[0]) {
         const firstResult = results[0] as { backup_finish_date?: string | Date };
         if (firstResult.backup_finish_date) {
-          const date = firstResult.backup_finish_date instanceof Date 
-            ? firstResult.backup_finish_date 
+          const date = firstResult.backup_finish_date instanceof Date
+            ? firstResult.backup_finish_date
             : new Date(firstResult.backup_finish_date);
           return date.toISOString().slice(0, 16).replace('T', ' ');
         }
@@ -259,7 +272,7 @@ ${query}
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       loggingService.warn(`Could not retrieve backup date: ${this.sanitizeError(errorMessage)}`);
     }
-    
+
     return 'Never';
   }
 

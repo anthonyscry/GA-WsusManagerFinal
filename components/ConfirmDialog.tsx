@@ -1,4 +1,5 @@
 import React from 'react';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 export interface ConfirmDialogProps {
   isOpen: boolean;
@@ -21,6 +22,14 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   onConfirm,
   onCancel
 }) => {
+  // Use focus trap for accessibility - handles escape key and tab trapping
+  const dialogRef = useFocusTrap<HTMLDivElement>({
+    isActive: isOpen,
+    onEscape: onCancel,
+    returnFocusOnDeactivate: true,
+    initialFocus: 'button', // Focus first button (cancel)
+  });
+
   if (!isOpen) return null;
 
   const variantStyles = {
@@ -29,7 +38,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   };
 
   return (
-    <div 
+    <div
       className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 backdrop-blur-2xl"
       onClick={onCancel}
       role="dialog"
@@ -37,7 +46,8 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       aria-labelledby="confirm-dialog-title"
       aria-describedby="confirm-dialog-message"
     >
-      <div 
+      <div
+        ref={dialogRef}
         className="bg-[#121216] w-full max-w-md rounded-2xl border border-slate-800 shadow-2xl overflow-hidden animate-scaleIn"
         onClick={(e) => e.stopPropagation()}
       >
