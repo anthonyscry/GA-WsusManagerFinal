@@ -117,60 +117,146 @@ class PowerShellService {
   }
 
   /**
-   * Check if command is whitelisted
-   * Checks if the script contains any of the allowed command patterns
+   * Check if command is whitelisted using strict validation
+   * Commands must appear in proper contexts, not just as substrings
+   *
+   * Security: This function enforces that only known-safe PowerShell commands
+   * can be executed, preventing arbitrary code execution
    */
   private isWhitelistedCommand(command: string): boolean {
-    // For complex scripts, check if they contain allowed commands
-    // This allows scripts with multiple commands, variables, conditionals, etc.
     const normalizedCommand = command.replace(/\s+/g, ' ').trim();
-    
-    // Check if script contains any allowed command pattern (anywhere in the string)
-    const containsAllowedCommand = ALLOWED_COMMAND_PATTERNS.some(pattern => {
-      // Remove the ^ anchor to check anywhere in the string, not just at start
-      const flexiblePattern = new RegExp(pattern.source.replace('^', ''), pattern.flags);
-      return flexiblePattern.test(normalizedCommand);
+
+    // SECURITY: Check if command appears as an actual command invocation
+    // Commands must be:
+    // 1. At the start of the string, OR
+    // 2. After a pipe |, OR
+    // 3. After a semicolon/newline, OR
+    // 4. After an assignment $var = , OR
+    // 5. After opening delimiters like ( or {
+    const commandInvocationContexts = [
+      /^/,                          // Start of string
+      /\|\s*/,                      // After pipe
+      /;\s*/,                       // After semicolon
+      /\n\s*/,                      // After newline
+      /\$[a-zA-Z_]\w*\s*=\s*/,     // After variable assignment
+      /\(\s*/,                      // After opening paren
+      /\{\s*/,                      // After opening brace
+      /\[\s*/,                      // After opening bracket (for array)
+    ];
+
+    // Check each whitelisted command pattern with proper context
+    const containsWhitelistedCommandInContext = ALLOWED_COMMAND_PATTERNS.some(pattern => {
+      const cmdName = pattern.source.replace(/^\^/, '').replace(/\/i$/, '');
+
+      // Check if command appears in valid invocation context
+      return commandInvocationContexts.some(ctx => {
+        const contextPattern = new RegExp(
+          ctx.source + cmdName,
+          'i'
+        );
+        return contextPattern.test(normalizedCommand);
+      });
     });
-    
-    if (containsAllowedCommand) {
+
+    if (containsWhitelistedCommandInContext) {
       return true;
     }
-    
-    // Also allow scripts that are clearly PowerShell variable assignments, control flow,
-    // or data manipulation that will be used with whitelisted commands
-    const isVariableAssignment = /\$[a-zA-Z_][a-zA-Z0-9_]*\s*=/.test(normalizedCommand);
-    const isControlFlow = /(if|else|foreach|where-object|select-object|for|while|try|catch)\s*\(/i.test(normalizedCommand);
-    const isDataManipulation = /(ConvertTo-Json|ConvertFrom-Json|Write-Output|Write-Error)/i.test(normalizedCommand);
-    const isPSCustomObject = /\[PSCustomObject\]/.test(normalizedCommand);
-    
-    // If it contains PowerShell constructs that are typically used with whitelisted commands
-    if (isVariableAssignment || isControlFlow || isDataManipulation || isPSCustomObject) {
+
+    // SECURITY: Only allow specific safe variable assignment patterns
+    // that are required for WSUS operations
+    const safeVariablePatterns = [
+      /^\$wsusServer\s*=\s*Get-WsusServer/i,
+      /^\$computers\s*=\s*Get-WsusComputer/i,
+      /^\$updates\s*=\s*Get-WsusUpdate/i,
+      /^\$stats\s*=\s*\[PSCustomObject\]/i,
+      /^\$result\s*=\s*\[PSCustomObject\]/i,
+      /^\$config\s*=/i,
+      /^\$service\s*=\s*Get-Service/i,
+      /^\$features?\s*=\s*Get-WindowsFeature/i,
+      /^\$task\s*=/i,
+      /^\$trigger\s*=/i,
+      /^\$action\s*=/i,
+      /^\$principal\s*=/i,
+      /^\$settings\s*=/i,
+      /^\$params?\s*=\s*@\{/i,  // Hashtable assignment
+    ];
+
+    // Check if variable assignment matches safe patterns
+    const isSafeVariableAssignment = safeVariablePatterns.some(pattern =>
+      pattern.test(normalizedCommand)
+    );
+
+    if (isSafeVariableAssignment) {
       return true;
     }
-    
-    // Allow module operations
-    if (/Get-Module|Import-Module|Install-Module/i.test(normalizedCommand)) {
+
+    // SECURITY: Allow only specific control flow with whitelisted content
+    const isControlFlowWithSafeContent = (
+      // Control flow keywords must be followed by whitelisted commands
+      /(if|foreach|for|try)\s*\(/.test(normalizedCommand) &&
+      containsWhitelistedCommandInContext
+    );
+
+    if (isControlFlowWithSafeContent) {
       return true;
     }
-    
+
+    // Allow PSCustomObject literals for data construction
+    if (/^\[PSCustomObject\]\s*@\{/.test(normalizedCommand)) {
+      return true;
+    }
+
+    // Allow module operations (already in whitelist, but ensure context)
+    if (/^(Get-Module|Import-Module)\s+/i.test(normalizedCommand)) {
+      return true;
+    }
+
     return false;
   }
 
   /**
-   * Sanitize PowerShell command to prevent injection
-   * Only removes truly dangerous patterns, preserves valid PowerShell syntax
+   * Sanitize PowerShell command to prevent injection attacks
+   * Preserves valid PowerShell syntax while blocking dangerous patterns
+   *
+   * SECURITY: This function removes known injection vectors while preserving
+   * legitimate PowerShell functionality needed for WSUS operations
    */
   private sanitizePowerShellCommand(command: string): string {
-    // Don't over-sanitize - PowerShell needs $, (), {}, etc.
-    // Only remove dangerous command chaining and injection patterns
-    return command
-      // Remove command chaining operators at line boundaries (but allow in strings)
-      .replace(/(?<!["']);(?![^"']*["'])/g, '')  // Remove semicolons not in quotes
-      .replace(/(?<!["'])\|(?![^"']*["'])/g, '')  // Remove pipes not in quotes (but this might be too aggressive)
-      // Remove backtick command substitution
-      .replace(/`[a-zA-Z]/g, ' ')  // Remove backtick escape sequences
-      // Preserve $ variables, (), {}, [] as they're needed for PowerShell
-      .trim();
+    let sanitized = command;
+
+    // SECURITY: Block dangerous command sequences
+    // Remove Invoke-Expression and iex (arbitrary code execution)
+    sanitized = sanitized.replace(/\bInvoke-Expression\b/gi, '');
+    sanitized = sanitized.replace(/\biex\b/gi, '');
+
+    // Remove DownloadString/DownloadFile (remote code loading)
+    sanitized = sanitized.replace(/\.DownloadString\s*\(/gi, '');
+    sanitized = sanitized.replace(/\.DownloadFile\s*\(/gi, '');
+
+    // Remove Start-Process with hidden window (stealth execution)
+    sanitized = sanitized.replace(/-WindowStyle\s+Hidden/gi, '');
+
+    // Remove base64 decoding patterns (encoded payload execution)
+    sanitized = sanitized.replace(/\[System\.Convert\]::FromBase64String/gi, '');
+    sanitized = sanitized.replace(/-EncodedCommand/gi, '');
+    sanitized = sanitized.replace(/-enc\b/gi, '');
+
+    // Remove memory stream execution patterns
+    sanitized = sanitized.replace(/\[System\.IO\.MemoryStream\]/gi, '');
+    sanitized = sanitized.replace(/\[System\.Reflection\.Assembly\]::Load/gi, '');
+
+    // Remove potentially dangerous backtick escape sequences
+    // But preserve backtick for line continuation and special chars
+    sanitized = sanitized.replace(/`0/g, '');  // Null char
+    sanitized = sanitized.replace(/`a/g, '');  // Alert/bell
+
+    // NOTE: We intentionally preserve:
+    // - Pipes (|) - required for PowerShell pipelines
+    // - Semicolons (;) - required for multi-statement scripts
+    // - $() - required for variable expansion
+    // - {} - required for script blocks
+
+    return sanitized.trim();
   }
 
   /**

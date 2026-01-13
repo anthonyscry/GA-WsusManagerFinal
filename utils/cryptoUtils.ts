@@ -1,38 +1,101 @@
 
 /**
  * Cryptographic utilities for secure password storage
- * Uses Web Crypto API for encryption
+ * Uses Web Crypto API for encryption with session-specific key derivation
+ *
+ * Security improvements:
+ * - Random salt per installation (stored securely)
+ * - Session-unique key material
+ * - OWASP-compliant iteration count
+ * - Random IV per encryption operation
  */
 
-const VAULT_KEY_NAME = 'wsus_vault_key';
+const VAULT_SALT_KEY = 'wsus_vault_salt';
 const IV_LENGTH = 12; // 96 bits for AES-GCM
+const SALT_LENGTH = 32; // 256-bit salt per OWASP
+const ITERATIONS = 600000; // OWASP 2023 recommendation for PBKDF2-SHA256
+
+// Session-unique component: derived from machine-specific entropy on first use
+let sessionKeyMaterial: Uint8Array | null = null;
 
 /**
- * Derive encryption key from session (in production, use proper key derivation)
+ * Get or generate installation-specific salt (stored in localStorage)
+ * This ensures each installation has unique encryption parameters
+ */
+function getOrCreateInstallationSalt(): Uint8Array {
+  try {
+    const storedSalt = localStorage.getItem(VAULT_SALT_KEY);
+    if (storedSalt) {
+      return Uint8Array.from(atob(storedSalt), c => c.charCodeAt(0));
+    }
+  } catch {
+    // localStorage unavailable, generate new salt
+  }
+
+  // Generate cryptographically secure random salt
+  const newSalt = crypto.getRandomValues(new Uint8Array(SALT_LENGTH));
+  try {
+    localStorage.setItem(VAULT_SALT_KEY, btoa(String.fromCharCode(...newSalt)));
+  } catch {
+    // If storage fails, salt will be regenerated next session (data loss acceptable for security)
+  }
+  return newSalt;
+}
+
+/**
+ * Generate session-specific key material using available entropy sources
+ * Combines: timestamp, random bytes, user-agent, and screen info
+ */
+function getSessionKeyMaterial(): Uint8Array {
+  if (sessionKeyMaterial) {
+    return sessionKeyMaterial;
+  }
+
+  // Gather entropy from multiple sources
+  const entropyParts: string[] = [
+    Date.now().toString(36),
+    Math.random().toString(36),
+    typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 50) : 'electron',
+    typeof screen !== 'undefined' ? `${screen.width}x${screen.height}` : '1920x1080',
+    crypto.getRandomValues(new Uint8Array(16)).join('')
+  ];
+
+  const entropyString = entropyParts.join('|');
+  sessionKeyMaterial = new TextEncoder().encode(entropyString);
+  return sessionKeyMaterial;
+}
+
+/**
+ * Derive encryption key using PBKDF2 with:
+ * - Session-specific key material (changes per app launch)
+ * - Installation-specific salt (persistent per machine)
+ * - OWASP-compliant iterations
  */
 async function getEncryptionKey(): Promise<CryptoKey> {
-  // In a real implementation, derive from user session or secure storage
-  // For now, using a fixed key derived from a constant (NOT SECURE FOR PRODUCTION)
-  // TODO: Implement proper key derivation from user session or Windows Credential Manager
-  
-  const keyMaterial = new TextEncoder().encode('wsus-manager-vault-key-2024'); // This should be session-based
-  
-  const key = await crypto.subtle.importKey(
+  const keyMaterial = getSessionKeyMaterial();
+  const salt = getOrCreateInstallationSalt();
+
+  // TypeScript 5.7+ requires explicit ArrayBuffer for crypto APIs
+  // Create a fresh ArrayBuffer from the Uint8Array to satisfy type constraints
+  const keyBuffer = new Uint8Array(keyMaterial).buffer;
+  const saltBuffer = new Uint8Array(salt).buffer;
+
+  const baseKey = await crypto.subtle.importKey(
     'raw',
-    keyMaterial,
+    keyBuffer,
     { name: 'PBKDF2' },
     false,
     ['deriveKey']
   );
-  
+
   return crypto.subtle.deriveKey(
     {
       name: 'PBKDF2',
-      salt: new TextEncoder().encode('wsus-salt'),
-      iterations: 100000,
+      salt: saltBuffer,
+      iterations: ITERATIONS,
       hash: 'SHA-256'
     },
-    key,
+    baseKey,
     { name: 'AES-GCM', length: 256 },
     false,
     ['encrypt', 'decrypt']

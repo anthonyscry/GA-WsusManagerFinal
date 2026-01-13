@@ -87,9 +87,22 @@ class WsusService {
       `;
 
       const result = await powershellService.execute(script);
-      
-      if (!result.success || !result.stdout) {
-        loggingService.warn('Failed to retrieve WSUS computers. Returning empty list.');
+
+      if (!result.success) {
+        // IMPROVED: Distinguish between different failure modes
+        if (result.stderr.includes('not whitelisted')) {
+          loggingService.error('[WSUS] Command blocked by security whitelist. Check PowerShell service configuration.');
+        } else if (result.stderr.includes('not in Electron')) {
+          loggingService.warn('[WSUS] Running in browser mode - WSUS operations require Electron.');
+        } else {
+          loggingService.error(`[WSUS] Failed to retrieve computers: ${result.stderr.substring(0, 200)}`);
+        }
+        return [];
+      }
+
+      if (!result.stdout) {
+        // Empty stdout with success = no computers found (valid state)
+        loggingService.info('[WSUS] Query succeeded but returned no computers.');
         return [];
       }
 
@@ -108,7 +121,9 @@ class WsusService {
       try {
         computers = JSON.parse(result.stdout) as ParsedComputer[] | ParsedComputer;
       } catch (parseError) {
-        loggingService.error('Failed to parse computers JSON');
+        const parseErrorMsg = parseError instanceof Error ? parseError.message : 'Unknown parse error';
+        loggingService.error(`[WSUS] Failed to parse computers JSON: ${parseErrorMsg}`);
+        loggingService.warn(`[WSUS] Raw output (first 500 chars): ${result.stdout.substring(0, 500)}`);
         return [];
       }
       

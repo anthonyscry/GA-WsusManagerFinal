@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 
 export interface ConfirmDialogProps {
   isOpen: boolean;
@@ -21,6 +21,31 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   onConfirm,
   onCancel
 }) => {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const cancelButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Handle escape key to close dialog
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      onCancel();
+    }
+  }, [onCancel]);
+
+  // Set up keyboard listener and focus management
+  useEffect(() => {
+    if (isOpen) {
+      // Add escape key listener
+      document.addEventListener('keydown', handleKeyDown);
+      // Focus the cancel button for accessibility
+      setTimeout(() => cancelButtonRef.current?.focus(), 0);
+
+      return () => {
+        document.removeEventListener('keydown', handleKeyDown);
+      };
+    }
+  }, [isOpen, handleKeyDown]);
+
   if (!isOpen) return null;
 
   const variantStyles = {
@@ -29,7 +54,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   };
 
   return (
-    <div 
+    <div
       className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 backdrop-blur-2xl"
       onClick={onCancel}
       role="dialog"
@@ -37,7 +62,8 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       aria-labelledby="confirm-dialog-title"
       aria-describedby="confirm-dialog-message"
     >
-      <div 
+      <div
+        ref={dialogRef}
         className="bg-[#121216] w-full max-w-md rounded-2xl border border-slate-800 shadow-2xl overflow-hidden animate-scaleIn"
         onClick={(e) => e.stopPropagation()}
       >
@@ -53,6 +79,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         </div>
         <div className="p-6 bg-black/40 border-t border-slate-800 flex gap-3">
           <button
+            ref={cancelButtonRef}
             onClick={onCancel}
             className="flex-1 py-3 px-4 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white rounded-lg text-sm font-semibold uppercase tracking-widest transition-all focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
             aria-label={cancelLabel}
