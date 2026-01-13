@@ -50,7 +50,7 @@ const AutomationView: React.FC = () => {
                </span>
             </div>
             <p className="text-[11px] font-medium text-slate-500 uppercase tracking-widest leading-relaxed">
-               Configure unattended maintenance scripts to run as "SYSTEM" under the local task scheduler engine for consistent compliance.
+               Configure unattended maintenance scripts to run as &quot;SYSTEM&quot; under the local task scheduler engine for consistent compliance.
             </p>
          </div>
          <div className="hidden md:block w-px h-12 bg-slate-800"></div>
@@ -75,7 +75,7 @@ const AutomationView: React.FC = () => {
                <div className="space-y-3">
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Recurrence Pattern</label>
                   <div className="grid grid-cols-3 gap-3">
-                     {['Daily', 'Weekly', 'Monthly'].map((p: any) => (
+                     {(['Daily', 'Weekly', 'Monthly'] as const).map((p) => (
                        <button 
                         key={p} 
                         onClick={() => setNewTrigger(p)}
@@ -106,6 +106,8 @@ const AutomationView: React.FC = () => {
                 disabled={isScheduling}
                 onClick={handleRegisterTask}
                 className="w-full py-5 bg-blue-600 text-white rounded-xl text-[11px] font-black uppercase tracking-widest shadow-xl shadow-blue-900/40 hover:bg-blue-500 transition-all active:scale-95 disabled:opacity-50"
+                aria-label="Register task in Windows Task Scheduler"
+                aria-busy={isScheduling}
                >
                  {isScheduling ? 'Syncing with Scheduler...' : 'Commit to Task Scheduler'}
                </button>

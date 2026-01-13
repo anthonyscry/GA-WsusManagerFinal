@@ -1,0 +1,40 @@
+body { 
+  font-family: 'Inter', sans-serif; 
+  background-color: #0a0a0c;
+  color: #e2e8f0;
+  background-image: radial-gradient(circle at 2px 2px, #1e293b 1px, transparent 0);
+  background-size: 40px 40px;
+}
+
+.mono { font-family: 'JetBrains Mono', monospace; }
+.sidebar-navy { background-color: #0f172a; }
+.panel-card {
+  background: #121216;
+  border: 1px solid #1e293b;
+  backdrop-filter: blur(12px);
+}
+
+/* Custom Scrollbar for Pro Look */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0a0a0c;
+}
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3b82f6;
+}
+
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+input::placeholder { color: #475569; }
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+.animate-pulse-soft { animation: pulse-soft 3s infinite; }

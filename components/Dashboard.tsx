@@ -1,76 +1,58 @@
 
-import React, { useState, useEffect } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, AreaChart, Area } from 'recharts';
+import React, { useMemo } from 'react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
 import { EnvironmentStats } from '../types';
-import { COLORS } from '../constants';
-import { stateService } from '../services/stateService';
-import { loggingService } from '../services/loggingService';
+import { useResourceMonitoring } from '../hooks/useResourceMonitoring';
+import { useThroughputData } from '../hooks/useThroughputData';
+import { useComplianceTrends } from '../hooks/useComplianceTrends';
+import { useDiagnostics } from '../hooks/useDiagnostics';
+import { calculateDatabaseUsagePercentage } from '../utils/calculations';
+import { getDatabaseUsageColor } from '../utils/statusHelpers';
+import { formatPercentage, formatGB } from '../utils/formatters';
+import { generatePieChartData } from '../utils/chartHelpers';
+import { DASHBOARD_CONSTANTS } from '../utils/dashboardConstants';
+
+const DATABASE_WARNING_THRESHOLD = 80;
 
 interface DashboardProps {
   stats: EnvironmentStats;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
-  const [isDiagnosing, setIsDiagnosing] = useState(false);
-  const [throughputData, setThroughputData] = useState<any[]>([]);
-  const [resources, setResources] = useState({ cpu: 12, ram: 45 });
+  const resources = useResourceMonitoring();
+  const throughputData = useThroughputData();
+  const complianceTrends = useComplianceTrends(stats);
+  const { isDiagnosing, runDiagnostics } = useDiagnostics();
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setThroughputData(prev => {
-        const newData = [...prev, { time: Date.now(), val: Math.random() * 50 + 20 }].slice(-20);
-        return newData;
-      });
-      // Simulate resource jitter
-      setResources({
-        cpu: Math.floor(Math.random() * 15) + 5,
-        ram: 42 + Math.random() * 4
-      });
-    }, 2000);
-    return () => clearInterval(interval);
-  }, []);
+  const pieData = useMemo(() => generatePieChartData(stats), [
+    stats.healthyComputers,
+    stats.warningComputers,
+    stats.criticalComputers,
+    stats
+  ]);
 
-  const pieData = [
-    { name: 'Healthy', value: stats.healthyComputers, color: COLORS.HEALTHY },
-    { name: 'Warning', value: stats.warningComputers, color: COLORS.WARNING },
-    { name: 'Critical', value: stats.criticalComputers, color: COLORS.CRITICAL },
-  ];
+  const dbPercentage = useMemo(
+    () => calculateDatabaseUsagePercentage(stats.db.currentSizeGB, stats.db.maxSizeGB),
+    [stats.db.currentSizeGB, stats.db.maxSizeGB]
+  );
 
-  const dbPercentage = (stats.db.currentSizeGB / stats.db.maxSizeGB) * 100;
+  const dbUsageColor = useMemo(() => getDatabaseUsageColor(dbPercentage), [dbPercentage]);
 
-  const handleRunDiagnostics = () => {
-    setIsDiagnosing(true);
-    loggingService.warn('INTEGRITY_CHECK: Initializing heartbeat scan...');
-    
-    const sequence = [
-      { msg: 'SQL: PAGE_VERIFY bits confirmed.', delay: 800 },
-      { msg: 'IIS: AppPool W3SVC recycling verified.', delay: 1600 },
-      { msg: 'WSUS: SUSDB retrieval latencies within 5ms.', delay: 2400 },
-      { msg: 'DISK: C:\\WSUS cluster alignment healthy.', delay: 3200 },
-      { msg: 'DIAG_COMPLETE: System integrity verified.', delay: 4000 }
-    ];
-
-    sequence.forEach(step => {
-      setTimeout(() => loggingService.info(`[DIAG] ${step.msg}`), step.delay);
-    });
-
-    setTimeout(() => {
-      setIsDiagnosing(false);
-      stateService.refreshTelemetry();
-    }, 4500);
-  };
+  const isConnected = stats.isInstalled && stats.totalComputers > 0;
 
   return (
     <div className="space-y-6 animate-fadeIn pb-12">
       {/* Top Banner */}
-      <div className="bg-[#121216] rounded-2xl p-6 border border-slate-800/40 flex items-center justify-between relative overflow-hidden shadow-2xl">
+      <div className={`rounded-2xl p-6 border flex items-center justify-between relative overflow-hidden shadow-2xl ${isConnected ? 'bg-[#121216] border-slate-800/40' : 'bg-rose-900/10 border-rose-500/20'}`}>
          <div className="flex items-center gap-5 relative z-10">
-            <div className="w-12 h-12 bg-blue-600/10 border border-blue-600/20 rounded-xl flex items-center justify-center text-blue-500">
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${isConnected ? 'bg-blue-600/10 border border-blue-600/20 text-blue-500' : 'bg-rose-500/10 border border-rose-500/20 text-rose-500'}`}>
                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
             </div>
             <div>
                <h3 className="text-xs font-black tracking-widest uppercase text-white">Environment Integrity</h3>
-               <p className="text-[10px] font-bold text-slate-500 uppercase mt-1">Infrastructure operational on portable runspace</p>
+               <p className={`text-[10px] font-bold uppercase mt-1 ${isConnected ? 'text-slate-500' : 'text-rose-400'}`}>
+                 {isConnected ? 'Infrastructure operational on portable runspace' : 'WSUS not connected - No data available'}
+               </p>
             </div>
          </div>
          <div className="flex items-center gap-6 relative z-10">
@@ -81,11 +63,13 @@ const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
                 </div>
                 <div className="text-right">
                     <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest">RAM UTIL</p>
-                    <p className="text-sm font-black text-white mono">{resources.ram.toFixed(1)}%</p>
+                    <p className="text-sm font-black text-white mono">{formatPercentage(resources.ram)}</p>
                 </div>
             </div>
-            <div className="px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
-               <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">System Stable</span>
+            <div className={`px-4 py-2 rounded-lg border ${isConnected ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-rose-500/10 border-rose-500/20'}`}>
+               <span className={`text-[10px] font-black uppercase tracking-widest ${isConnected ? 'text-emerald-500' : 'text-rose-500'}`}>
+                 {isConnected ? 'System Stable' : 'Not Connected'}
+               </span>
             </div>
          </div>
          <div className="absolute top-0 right-0 w-32 h-full bg-blue-600/5 rotate-12 translate-x-16"></div>
@@ -98,21 +82,21 @@ const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
          <div className="bg-[#121216] p-5 rounded-xl border border-slate-800/40 shadow-lg group hover:border-blue-500/30 transition-all">
             <div className="flex justify-between items-start mb-1">
                <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest">Database Usage</p>
-               <span className={`text-[8px] font-black uppercase ${dbPercentage > 85 ? 'text-rose-500' : 'text-amber-500'}`}>
-                  {dbPercentage.toFixed(1)}%
+               <span className={`text-[8px] font-black uppercase ${dbPercentage > DATABASE_WARNING_THRESHOLD ? 'text-rose-500' : 'text-amber-500'}`}>
+                  {formatPercentage(dbPercentage)}
                </span>
             </div>
-            <p className="text-xl font-black tracking-tight text-white">{stats.db.currentSizeGB} <span className="text-[10px] text-slate-600 font-bold uppercase">/ {stats.db.maxSizeGB} GB</span></p>
+            <p className="text-xl font-black tracking-tight text-white">{formatGB(stats.db.currentSizeGB, 0)} <span className="text-[10px] text-slate-600 font-bold uppercase">/ {formatGB(stats.db.maxSizeGB, 0)}</span></p>
             <div className="mt-3 h-1 w-full bg-slate-900 rounded-full overflow-hidden">
                <div 
-                  className={`h-full transition-all duration-1000 ${dbPercentage > 85 ? 'bg-rose-500' : 'bg-blue-500'}`} 
+                  className={`h-full transition-all duration-1000 ${dbUsageColor}`} 
                   style={{ width: `${dbPercentage}%` }}
                ></div>
             </div>
          </div>
 
-         <StatCard label="Compliance Rate" value="94.2%" color="emerald" />
-         <StatCard label="Available Storage" value={`${stats.diskFreeGB} GB`} color="slate" />
+         <StatCard label="Compliance Rate" value={stats.totalComputers > 0 ? `${Math.round((stats.healthyComputers / stats.totalComputers) * 100)}%` : 'N/A'} color="emerald" />
+         <StatCard label="Available Storage" value={formatGB(stats.diskFreeGB)} color="slate" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -124,20 +108,100 @@ const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
                   <p className="text-[10px] font-bold text-slate-600 mt-1 uppercase">Distribution of Node Health</p>
                </div>
             </div>
-            <div className="h-[240px] w-full flex items-center justify-center">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={pieData} cx="50%" cy="50%" innerRadius={70} outerRadius={90} paddingAngle={10} dataKey="value" stroke="none">
-                    {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
-                  </Pie>
-                  <Tooltip contentStyle={{ backgroundColor: '#121216', border: '1px solid #1e293b', borderRadius: '8px', fontSize: '10px' }} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="absolute flex flex-col items-center">
-                <span className="text-3xl font-black text-white tracking-tighter">{stats.totalComputers}</span>
-                <span className="text-[8px] text-slate-600 font-black uppercase tracking-widest">Total Nodes</span>
+            {stats.totalComputers === 0 ? (
+              <div className="h-[240px] w-full flex items-center justify-center">
+                <div className="text-center">
+                  <p className="text-sm font-black text-slate-500 uppercase tracking-widest mb-2">No Data Available</p>
+                  <p className="text-[10px] font-bold text-slate-700 uppercase tracking-tight">Connect to WSUS server to view topology</p>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="h-[240px] w-full flex items-center justify-center">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie 
+                      data={pieData} 
+                      cx="50%" 
+                      cy="50%" 
+                      innerRadius={DASHBOARD_CONSTANTS.PIE_CHART_INNER_RADIUS} 
+                      outerRadius={DASHBOARD_CONSTANTS.PIE_CHART_OUTER_RADIUS} 
+                      paddingAngle={DASHBOARD_CONSTANTS.PIE_CHART_PADDING_ANGLE} 
+                      dataKey="value" 
+                      stroke="none"
+                    >
+                      {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                    </Pie>
+                    <Tooltip contentStyle={{ backgroundColor: '#121216', border: '1px solid #1e293b', borderRadius: '8px', fontSize: '10px' }} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute flex flex-col items-center">
+                  <span className="text-3xl font-black text-white tracking-tighter">{stats.totalComputers}</span>
+                  <span className="text-[8px] text-slate-600 font-black uppercase tracking-widest">Total Nodes</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Compliance Trends Chart */}
+          <div className="bg-[#121216] rounded-2xl p-6 border border-slate-800/40 shadow-lg">
+             <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h3 className="text-[10px] font-black text-white uppercase tracking-widest">Compliance Trends</h3>
+                  <p className="text-[9px] font-bold text-slate-600 mt-1 uppercase">30-Day Historical View</p>
+                </div>
+                {complianceTrends.length > 0 && (
+                  <span className="text-[10px] font-bold text-emerald-500 mono uppercase tracking-tight">
+                    Current: {complianceTrends[complianceTrends.length - 1]?.compliance || 0}%
+                  </span>
+                )}
+             </div>
+             {complianceTrends.length === 0 ? (
+               <div className="h-48 w-full flex items-center justify-center">
+                 <div className="text-center">
+                   <p className="text-[10px] font-bold text-slate-700 uppercase tracking-tight">No trend data available</p>
+                   <p className="text-[9px] text-slate-600 mt-1">Connect to WSUS to view compliance history</p>
+                 </div>
+               </div>
+             ) : (
+               <div className="h-48 w-full">
+                 <ResponsiveContainer width="100%" height="100%">
+                   <LineChart data={complianceTrends}>
+                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                     <XAxis 
+                       dataKey="date" 
+                       stroke="#64748b"
+                       tick={{ fill: '#64748b', fontSize: 9, fontWeight: 'bold' }}
+                       interval="preserveStartEnd"
+                     />
+                     <YAxis 
+                       domain={[0, 100]}
+                       stroke="#64748b"
+                       tick={{ fill: '#64748b', fontSize: 9, fontWeight: 'bold' }}
+                       label={{ value: 'Compliance %', angle: -90, position: 'insideLeft', fill: '#64748b', fontSize: 9 }}
+                     />
+                     <Tooltip 
+                       contentStyle={{ 
+                         backgroundColor: '#121216', 
+                         border: '1px solid #1e293b', 
+                         borderRadius: '8px',
+                         fontSize: '10px',
+                         padding: '8px'
+                       }}
+                       labelStyle={{ color: '#94a3b8', fontWeight: 'bold', fontSize: '9px' }}
+                     />
+                     <Line 
+                       type="monotone" 
+                       dataKey="compliance" 
+                       stroke="#10b981" 
+                       strokeWidth={2}
+                       dot={{ fill: '#10b981', r: 3 }}
+                       activeDot={{ r: 5 }}
+                       name="Compliance %"
+                     />
+                   </LineChart>
+                 </ResponsiveContainer>
+               </div>
+             )}
           </div>
 
           {/* Network Graph Simulation */}
@@ -160,20 +224,28 @@ const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
            <h3 className="text-xs font-black text-white uppercase tracking-widest mb-2">Service Monitor</h3>
            <p className="text-[10px] font-bold text-slate-600 mb-8 uppercase">Live Runtime Heartbeat</p>
            <div className="space-y-3 flex-1">
-              {stats.services.map((s, i) => (
-                 <div key={i} className="flex items-center justify-between p-4 bg-black/40 rounded-xl border border-slate-800/30 group hover:border-blue-500/20 transition-all">
+              {stats.services.length === 0 ? (
+                <div className="p-4 text-center">
+                  <p className="text-[10px] font-bold text-slate-700 uppercase tracking-tight">No service data available</p>
+                </div>
+              ) : (
+                stats.services.map((s, i) => (
+                  <div key={i} className="flex items-center justify-between p-4 bg-black/40 rounded-xl border border-slate-800/30 group hover:border-blue-500/20 transition-all">
                     <div className="flex items-center gap-3">
-                       <div className={`w-1.5 h-1.5 rounded-full ${s.status === 'Running' ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-rose-500 shadow-[0_0_8px_#ef4444]'}`}></div>
-                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">{s.name}</span>
+                      <div className={`w-1.5 h-1.5 rounded-full ${s.status === 'Running' ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-rose-500 shadow-[0_0_8px_#ef4444]'}`}></div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">{s.name}</span>
                     </div>
                     <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest">{s.status}</span>
-                 </div>
-              ))}
+                  </div>
+                ))
+              )}
            </div>
            <button 
             disabled={isDiagnosing}
-            onClick={handleRunDiagnostics}
+            onClick={runDiagnostics}
             className={`w-full mt-6 py-4 border rounded-xl text-[9px] font-black uppercase tracking-widest transition-all shadow-xl ${isDiagnosing ? 'bg-blue-600 text-white animate-pulse' : 'bg-slate-900 hover:bg-slate-800 border-slate-800/50 text-slate-500 hover:text-slate-300'}`}
+            aria-label="Run infrastructure diagnostics"
+            aria-busy={isDiagnosing}
            >
               {isDiagnosing ? 'Diagnostics Active...' : 'Run Infrastructure Test'}
            </button>
@@ -183,8 +255,14 @@ const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
   );
 };
 
-const StatCard = ({ label, value, color }: any) => {
-  const colorMap: any = {
+interface StatCardProps {
+  label: string;
+  value: string | number;
+  color: 'blue' | 'amber' | 'emerald' | 'slate';
+}
+
+const StatCard: React.FC<StatCardProps> = ({ label, value, color }) => {
+  const colorMap: Record<string, string> = {
     blue: 'text-blue-500',
     amber: 'text-amber-500',
     emerald: 'text-emerald-500',

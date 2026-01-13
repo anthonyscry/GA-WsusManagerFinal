@@ -5,19 +5,30 @@ import react from '@vitejs/plugin-react';
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
     return {
+      base: './',
       server: {
         port: 3000,
         host: '0.0.0.0',
       },
       plugins: [react()],
       define: {
-        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
+        'process.env.NODE_ENV': JSON.stringify(mode === 'production' ? 'production' : 'development')
       },
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
+      },
+      build: {
+        outDir: 'dist',
+        emptyOutDir: true,
+        rollupOptions: {
+          input: path.resolve(__dirname, 'index.html'),
+          external: ['child_process', 'util', 'fs', 'path']
+        },
+      },
+      optimizeDeps: {
+        exclude: ['child_process', 'util']
       }
     };
 });

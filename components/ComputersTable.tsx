@@ -1,38 +1,40 @@
 
-import React, { useState } from 'react';
-import { WsusComputer, HealthStatus } from '../types';
+import React, { useState, useMemo } from 'react';
+import { WsusComputer } from '../types';
 import { Icons } from '../constants';
 import { loggingService } from '../services/loggingService';
 import { stateService } from '../services/stateService';
+import { useSelection } from '../hooks/useSelection';
+import { useSearch } from '../hooks/useSearch';
+import { getStatusBadgeColor } from '../utils/statusHelpers';
+import { calculateCompliancePercentage } from '../utils/calculations';
 
 interface ComputersTableProps {
   computers: WsusComputer[];
 }
 
 const ComputersTable: React.FC<ComputersTableProps> = ({ computers }) => {
-  const [searchTerm, setSearchTerm] = useState('');
   const [selectedNode, setSelectedNode] = useState<WsusComputer | null>(null);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const filtered = computers.filter(c => 
-    c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.ipAddress.includes(searchTerm)
+  const { searchTerm, setSearchTerm, filtered } = useSearch(
+    computers,
+    (computer) => `${computer.name} ${computer.ipAddress}`
   );
 
-  const toggleSelectAll = () => {
-    if (selectedIds.size === filtered.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filtered.map(c => c.id)));
-    }
-  };
+  const filteredIds = useMemo(() => filtered.map(c => c.id), [filtered]);
 
-  const toggleSelect = (id: string) => {
-    const newSet = new Set(selectedIds);
-    if (newSet.has(id)) newSet.delete(id);
-    else newSet.add(id);
-    setSelectedIds(newSet);
+  const {
+    selectedIds,
+    isAllSelected,
+    isSelected,
+    toggleSelect,
+    toggleSelectAll: handleToggleSelectAll,
+    clearSelection
+  } = useSelection(filteredIds);
+
+  const toggleSelectAll = () => {
+    handleToggleSelectAll();
   };
 
   const handleBulkAction = async (action: 'PING' | 'SYNC' | 'RESET') => {
@@ -40,17 +42,8 @@ const ComputersTable: React.FC<ComputersTableProps> = ({ computers }) => {
     await stateService.performBulkAction(Array.from(selectedIds), action);
     setTimeout(() => {
         setIsProcessing(false);
-        setSelectedIds(new Set());
+        clearSelection();
     }, 1000);
-  };
-
-  const getStatusBadge = (status: HealthStatus) => {
-    switch (status) {
-      case HealthStatus.HEALTHY: return "bg-emerald-500";
-      case HealthStatus.WARNING: return "bg-amber-500";
-      case HealthStatus.CRITICAL: return "bg-rose-500";
-      default: return "bg-slate-600";
-    }
   };
 
   return (
@@ -68,9 +61,15 @@ const ComputersTable: React.FC<ComputersTableProps> = ({ computers }) => {
           <input 
             type="text" 
             placeholder="Search by hostname..." 
+            maxLength={255}
             className="w-full bg-black/40 border border-slate-800 rounded-lg pl-12 pr-6 py-3 text-sm font-bold text-white focus:outline-none focus:border-blue-500 transition-all"
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              if (e.target.value.length <= 255) {
+                setSearchTerm(e.target.value);
+              }
+            }}
+            aria-label="Search computers by hostname"
           />
         </div>
       </div>
@@ -82,9 +81,10 @@ const ComputersTable: React.FC<ComputersTableProps> = ({ computers }) => {
               <th className="px-8 py-5 w-12">
                 <input 
                   type="checkbox" 
-                  checked={selectedIds.size === filtered.length && filtered.length > 0} 
+                  checked={isAllSelected} 
                   onChange={toggleSelectAll}
                   className="w-4 h-4 rounded border-slate-800 bg-black text-blue-600 focus:ring-blue-600 focus:ring-offset-0"
+                  aria-label="Select all computers"
                 />
               </th>
               <th className="px-8 py-5">Node Identity</th>
@@ -94,18 +94,37 @@ const ComputersTable: React.FC<ComputersTableProps> = ({ computers }) => {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/50">
-            {filtered.map((computer) => {
-              const total = computer.updatesInstalled + computer.updatesNeeded;
-              const perc = total > 0 ? (computer.updatesInstalled / total) * 100 : 100;
-              const isSelected = selectedIds.has(computer.id);
+            {filtered.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-8 py-20 text-center">
+                  <div className="flex flex-col items-center gap-4">
+                    <div className="w-16 h-16 bg-slate-900/40 border border-slate-800 rounded-xl flex items-center justify-center">
+                      <Icons.Computers className="w-8 h-8 text-slate-700" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-slate-500 uppercase tracking-widest mb-2">No Computers Found</p>
+                      <p className="text-[10px] font-bold text-slate-700 uppercase tracking-tight">
+                        {computers.length === 0 
+                          ? 'WSUS server not connected. Please ensure WSUS is installed and running.'
+                          : 'No computers match your search criteria.'}
+                      </p>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              filtered.map((computer) => {
+              const perc = calculateCompliancePercentage(computer.updatesInstalled, computer.updatesNeeded);
+              const isItemSelected = isSelected(computer.id);
               return (
-                <tr key={computer.id} className={`hover:bg-slate-800/20 transition-colors group ${isSelected ? 'bg-blue-600/5' : ''}`}>
+                <tr key={computer.id} className={`hover:bg-slate-800/20 transition-colors group ${isItemSelected ? 'bg-blue-600/5' : ''}`}>
                   <td className="px-8 py-6">
                     <input 
                       type="checkbox" 
-                      checked={isSelected} 
+                      checked={isItemSelected} 
                       onChange={() => toggleSelect(computer.id)}
                       className="w-4 h-4 rounded border-slate-800 bg-black text-blue-600 focus:ring-blue-600 focus:ring-offset-0"
+                      aria-label={`Select ${computer.name}`}
                     />
                   </td>
                   <td className="px-8 py-6">
@@ -121,7 +140,7 @@ const ComputersTable: React.FC<ComputersTableProps> = ({ computers }) => {
                   </td>
                   <td className="px-8 py-6">
                     <div className="flex items-center gap-2.5">
-                      <span className={`w-2 h-2 rounded-full ${getStatusBadge(computer.status)} shadow-[0_0_5px_currentColor]`}></span>
+                      <span className={`w-2 h-2 rounded-full ${getStatusBadgeColor(computer.status)} shadow-[0_0_5px_currentColor]`}></span>
                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{computer.status}</span>
                     </div>
                   </td>
@@ -140,13 +159,14 @@ const ComputersTable: React.FC<ComputersTableProps> = ({ computers }) => {
                     <button 
                       onClick={() => setSelectedNode(computer)}
                       className="text-[10px] font-black text-blue-500 hover:text-white uppercase tracking-widest px-4 py-2 hover:bg-blue-600 rounded-lg transition-all border border-transparent hover:border-blue-400"
+                      aria-label={`Interact with ${computer.name}`}
                     >
                       Interact
                     </button>
                   </td>
-                </tr>
-              );
-            })}
+              </tr>
+            );
+            }))}
           </tbody>
         </table>
       </div>
@@ -170,28 +190,75 @@ const ComputersTable: React.FC<ComputersTableProps> = ({ computers }) => {
               </div>
 
               <div className="flex-1 overflow-y-auto p-8 space-y-8">
-                  <div className="grid grid-cols-2 gap-4">
-                      <div className="p-4 bg-black/40 rounded-xl border border-slate-800">
-                          <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-1">Operating System</p>
-                          <p className="text-[11px] font-bold text-white">{selectedNode.os}</p>
-                      </div>
-                      <div className="p-4 bg-black/40 rounded-xl border border-slate-800">
-                          <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-1">Target Group</p>
-                          <p className="text-[11px] font-bold text-white">{selectedNode.targetGroup}</p>
+                  {/* System Information */}
+                  <div className="space-y-4">
+                      <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">System Information</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                          <div className="p-4 bg-black/40 rounded-xl border border-slate-800">
+                              <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-1">Operating System</p>
+                              <p className="text-[11px] font-bold text-white">{selectedNode.os}</p>
+                          </div>
+                          <div className="p-4 bg-black/40 rounded-xl border border-slate-800">
+                              <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-1">Target Group</p>
+                              <p className="text-[11px] font-bold text-white">{selectedNode.targetGroup}</p>
+                          </div>
+                          <div className="p-4 bg-black/40 rounded-xl border border-slate-800">
+                              <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-1">IP Address</p>
+                              <p className="text-[11px] font-bold text-white mono">{selectedNode.ipAddress}</p>
+                          </div>
+                          <div className="p-4 bg-black/40 rounded-xl border border-slate-800">
+                              <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-1">Health Status</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                  <span className={`w-2 h-2 rounded-full ${getStatusBadgeColor(selectedNode.status)} shadow-[0_0_5px_currentColor]`}></span>
+                                  <p className="text-[11px] font-bold text-white uppercase">{selectedNode.status}</p>
+                              </div>
+                          </div>
                       </div>
                   </div>
 
+                  {/* Compliance Breakdown */}
                   <div className="space-y-4">
-                      <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">Compliance Snapshot</h4>
+                      <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">Compliance Breakdown</h4>
                       <div className="space-y-3">
-                          <div className="flex justify-between items-center p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-xl">
-                              <span className="text-[10px] font-bold text-emerald-500 uppercase">Updates Installed</span>
-                              <span className="text-sm font-black text-white mono">{selectedNode.updatesInstalled}</span>
+                          <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-xl">
+                              <div className="flex justify-between items-center mb-2">
+                                  <span className="text-[10px] font-bold text-emerald-500 uppercase">Updates Installed</span>
+                                  <span className="text-sm font-black text-white mono">{selectedNode.updatesInstalled}</span>
+                              </div>
+                              <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
+                                  <div 
+                                    className="h-full bg-emerald-500 transition-all duration-1000" 
+                                    style={{ width: `${calculateCompliancePercentage(selectedNode.updatesInstalled, selectedNode.updatesNeeded)}%` }}
+                                  ></div>
+                              </div>
                           </div>
-                          <div className={`flex justify-between items-center p-4 rounded-xl border ${selectedNode.updatesNeeded > 0 ? 'bg-rose-500/5 border-rose-500/10' : 'bg-slate-900/40 border-slate-800'}`}>
-                              <span className={`text-[10px] font-bold uppercase ${selectedNode.updatesNeeded > 0 ? 'text-rose-500' : 'text-slate-500'}`}>Updates Pending</span>
-                              <span className="text-sm font-black text-white mono">{selectedNode.updatesNeeded}</span>
+                          <div className={`p-4 rounded-xl border ${selectedNode.updatesNeeded > 0 ? 'bg-rose-500/5 border-rose-500/10' : 'bg-slate-900/40 border-slate-800'}`}>
+                              <div className="flex justify-between items-center mb-2">
+                                  <span className={`text-[10px] font-bold uppercase ${selectedNode.updatesNeeded > 0 ? 'text-rose-500' : 'text-slate-500'}`}>Updates Pending</span>
+                                  <span className="text-sm font-black text-white mono">{selectedNode.updatesNeeded}</span>
+                              </div>
+                              {selectedNode.updatesNeeded > 0 && (
+                                  <p className="text-[9px] text-rose-400 mt-2">Action required: {selectedNode.updatesNeeded} update{selectedNode.updatesNeeded !== 1 ? 's' : ''} pending installation</p>
+                              )}
                           </div>
+                          <div className="p-4 bg-blue-500/5 border border-blue-500/10 rounded-xl">
+                              <div className="flex justify-between items-center">
+                                  <span className="text-[10px] font-bold text-blue-500 uppercase">Compliance Rate</span>
+                                  <span className="text-lg font-black text-white mono">{calculateCompliancePercentage(selectedNode.updatesInstalled, selectedNode.updatesNeeded).toFixed(1)}%</span>
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+
+                  {/* Sync Information */}
+                  <div className="space-y-4 pt-4 border-t border-slate-800">
+                      <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">Synchronization</h4>
+                      <div className="p-4 bg-black/40 rounded-xl border border-slate-800">
+                          <div className="flex justify-between items-center mb-2">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase">Last Sync</span>
+                              <span className="text-[11px] font-bold text-white">{selectedNode.lastSync}</span>
+                          </div>
+                          <p className="text-[9px] text-slate-600 mt-2">Last successful synchronization with WSUS server</p>
                       </div>
                   </div>
 
@@ -203,7 +270,7 @@ const ComputersTable: React.FC<ComputersTableProps> = ({ computers }) => {
                         Force Client Sync
                       </button>
                       <button 
-                        onClick={() => { stateService.simulateReset(selectedNode.id); setSelectedNode(null); }}
+                        onClick={() => { loggingService.warn('Reset action requires WSUS connection'); setSelectedNode(null); }}
                         className="w-full py-4 bg-slate-900 hover:bg-slate-800 text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-widest border border-slate-800 transition-all"
                       >
                         Remote Reboot Node
@@ -221,7 +288,7 @@ const ComputersTable: React.FC<ComputersTableProps> = ({ computers }) => {
       {selectedIds.size > 0 && (
           <div className="fixed bottom-12 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-8 z-[100] animate-slideUp border border-blue-400/40 backdrop-blur-xl">
              <div className="flex items-center gap-3">
-                <span className="text-[11px] font-black uppercase tracking-widest bg-white/20 px-3 py-1 rounded-lg">{selectedIds.size} Nodes Selected</span>
+                <span className="text-[11px] font-black uppercase tracking-widest bg-white/20 px-3 py-1 rounded-lg">{Array.from(selectedIds).length} Nodes Selected</span>
              </div>
              <div className="h-6 w-px bg-white/20"></div>
              <div className="flex items-center gap-4">
@@ -248,7 +315,7 @@ const ComputersTable: React.FC<ComputersTableProps> = ({ computers }) => {
                 </button>
              </div>
              <div className="h-6 w-px bg-white/20"></div>
-             <button onClick={() => setSelectedIds(new Set())} className="text-[10px] font-black uppercase tracking-widest opacity-60 hover:opacity-100">Cancel</button>
+             <button onClick={clearSelection} className="text-[10px] font-black uppercase tracking-widest opacity-60 hover:opacity-100">Cancel</button>
           </div>
       )}
     </div>

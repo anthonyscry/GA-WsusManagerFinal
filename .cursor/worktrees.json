@@ -1,0 +1,17 @@
+{
+  "setup-worktree": [
+    "npm install"
+  ],
+  "ai-agents": {
+    "enabled": true,
+    "configFile": ".cursor/agents.json",
+    "promptFile": "AI_AGENTS.md",
+    "autoActivate": true,
+    "defaultAgent": "project-lead"
+  },
+  "projectSettings": {
+    "autoSetupAgents": true,
+    "copyAgentsOnInit": true,
+    "agentTemplatePath": ".cursor/agents.json"
+  }
+}

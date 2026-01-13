@@ -1,0 +1,27 @@
+node_modules/
+dist/
+release/
+.vite/
+*.log
+.DS_Store
+.env
+.env.local
+*.exe
+*.dmg
+*.AppImage
+
+# Build artifacts
+build/*.bak
+build/*-temp.*
+build/icon-temp.*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+.DS_Store

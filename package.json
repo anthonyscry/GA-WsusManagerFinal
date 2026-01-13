@@ -1,38 +1,63 @@
-
 {
   "name": "ga-wsus-manager-pro",
   "version": "3.8.6",
   "description": "Standalone Portable WSUS Management Suite",
   "main": "main.js",
   "scripts": {
-    "start": "electron .",
-    "build:exe": "electron-builder build --win --portable"
+    "dev": "vite",
+    "build": "vite build",
+    "postbuild": "node scripts/codeReview.js",
+    "preview": "vite preview",
+    "electron": "electron .",
+    "electron:dev": "vite build && electron .",
+    "build:exe": "npm run build && electron-builder --win",
+    "start": "npm run build && electron .",
+    "lint": "eslint . --ext .ts,.tsx --max-warnings 50",
+    "lint:fix": "eslint . --ext .ts,.tsx --fix",
+    "review": "node scripts/codeReview.js",
+    "typecheck": "tsc --noEmit",
+    "debug:checklist": "node scripts/debugChecklist.js",
+    "debug:checklist:full": "node scripts/debugChecklist.js --full"
   },
   "author": "Tony Tran",
   "license": "ISC",
+  "dependencies": {
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "recharts": "^3.6.0"
+  },
   "devDependencies": {
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "@vitejs/plugin-react": "^4.3.4",
     "electron": "^31.0.0",
-    "electron-builder": "^24.13.3"
+    "electron-builder": "^24.13.3",
+    "eslint": "^8.57.0",
+    "eslint-plugin-react": "^7.37.0",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5"
   },
   "build": {
     "appId": "com.ga-asi.wsusmanager",
     "productName": "GA-WsusManager Pro",
     "files": [
-      "index.html",
+      "dist/**/*",
       "main.js",
-      "index.tsx",
-      "types.ts",
-      "constants.tsx",
-      "services/**/*",
-      "components/**/*",
-      "metadata.json"
+      "package.json"
     ],
     "directories": {
-      "output": "dist"
+      "output": "release"
     },
     "win": {
       "target": "portable",
-      "icon": "icon.ico"
+      "sign": null
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
     }
   }
 }

@@ -1,11 +1,10 @@
 
 import React, { useState } from 'react';
-import { Icons } from '../constants';
 import { stateService } from '../services/stateService';
 import { loggingService } from '../services/loggingService';
 
 const AuditView: React.FC = () => {
-  const [checks, setChecks] = useState(stateService.getStigChecks());
+  const [checks] = useState(stateService.getStigChecks());
   const [isExporting, setIsExporting] = useState(false);
 
   const handleExportChecklist = () => {
@@ -31,6 +30,8 @@ const AuditView: React.FC = () => {
             disabled={isExporting}
             onClick={handleExportChecklist}
             className="px-8 py-4 bg-blue-600 text-white rounded-xl text-[11px] font-black uppercase tracking-widest shadow-xl hover:bg-blue-500 disabled:opacity-50"
+            aria-label="Export STIG compliance checklist"
+            aria-busy={isExporting}
          >
             {isExporting ? 'Generating XML...' : 'Export CKLS Snapshot'}
          </button>

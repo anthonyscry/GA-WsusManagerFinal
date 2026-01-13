@@ -9,14 +9,25 @@ import AutomationView from './components/AutomationView';
 import AuditView from './components/AuditView';
 import AboutView from './components/AboutView';
 import JobOverlay from './components/JobOverlay';
-import AIAssistant from './components/AIAssistant';
+import ErrorBoundary from './components/ErrorBoundary';
 import { stateService } from './services/stateService';
 import { loggingService } from './services/loggingService';
+import { startConnectivityMonitoring, stopConnectivityMonitoring, checkConnectivityOnce } from './utils/connectivityChecker';
+
+const REFRESH_INTERVAL_SECONDS = 30;
+const MAX_TERMINAL_INPUT_LENGTH = 1000;
+
+interface NavItemProps {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+}
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'computers' | 'maintenance' | 'automation' | 'logs' | 'audit' | 'help'>('dashboard');
   const [isAirGap, setIsAirGap] = useState(stateService.isAirGap());
-  const [refreshTimer, setRefreshTimer] = useState(30);
+  const [refreshTimer, setRefreshTimer] = useState(REFRESH_INTERVAL_SECONDS);
   const [stats, setStats] = useState(stateService.getStats());
   const [computers, setComputers] = useState(stateService.getComputers());
   const [jobs, setJobs] = useState(stateService.getJobs());
@@ -33,17 +44,38 @@ const App: React.FC = () => {
       setIsAirGap(stateService.isAirGap());
     });
 
+    // Check connectivity on startup and set air-gap mode if offline
+    checkConnectivityOnce().then(isOnline => {
+      if (!isOnline) {
+        loggingService.warn('[SYSTEM] No internet connection detected - automatically enabling AIR-GAP mode');
+        stateService.setAirGapFromConnectivity(false);
+      }
+    });
+
+    // Start connectivity monitoring
+    const handleConnectivityChange = (isOnline: boolean) => {
+      stateService.setAirGapFromConnectivity(isOnline);
+    };
+    startConnectivityMonitoring(handleConnectivityChange);
+
     const timer = setInterval(() => {
       setRefreshTimer(prev => {
         if (prev <= 1) {
-          stateService.refreshTelemetry();
-          return 30;
+          stateService.refreshTelemetry().catch(err => {
+            const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+            loggingService.error(`Failed to refresh telemetry: ${errorMessage}`);
+          });
+          return REFRESH_INTERVAL_SECONDS;
         }
         return prev - 1;
       });
     }, 1000);
 
-    return () => { unsubscribe(); clearInterval(timer); };
+    return () => {
+      unsubscribe();
+      clearInterval(timer);
+      stopConnectivityMonitoring(handleConnectivityChange);
+    };
   }, []);
 
   const handleCommand = (e: React.FormEvent) => {
@@ -53,12 +85,26 @@ const App: React.FC = () => {
     setTerminalInput('');
   };
 
-  const toggleMode = () => {
-    stateService.setAirGap(!isAirGap);
+  const toggleMode = async () => {
+    // Before allowing toggle to cloud-sync, check if we have internet
+    if (!isAirGap) {
+      // Switching to air-gap - always allowed
+      stateService.setAirGap(true);
+    } else {
+      // Switching to cloud-sync - check connectivity first
+      const isOnline = await checkConnectivityOnce();
+      if (!isOnline) {
+        loggingService.warn('[SYSTEM] Cannot switch to Cloud-Sync mode - no internet connection detected');
+        // Optionally show a user notification here
+        return;
+      }
+      stateService.setAirGap(false);
+    }
   };
 
   return (
-    <div className="flex h-screen bg-[#0a0a0c] text-zinc-100 overflow-hidden font-sans select-none relative">
+    <ErrorBoundary>
+      <div className="flex h-screen bg-[#0a0a0c] text-zinc-100 overflow-hidden font-sans select-none relative">
       <nav className="w-64 sidebar-navy border-r border-slate-800/40 flex flex-col z-50">
         <div className="p-8 pb-10 flex items-center gap-4">
           <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white shadow-xl p-2 transition-transform hover:rotate-3">
@@ -103,6 +149,7 @@ const App: React.FC = () => {
                 <button 
                   onClick={toggleMode}
                   className={`w-10 h-5 rounded-full relative transition-colors ${isAirGap ? 'bg-slate-800' : 'bg-blue-600'}`}
+                  title={isAirGap ? 'Click to switch to Cloud-Sync (requires internet)' : 'Click to switch to Air-Gap mode'}
                 >
                   <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${isAirGap ? 'left-1' : 'left-6 shadow-[0_0_8px_white]'}`}></div>
                 </button>
@@ -149,11 +196,17 @@ const App: React.FC = () => {
                  <input 
                   autoFocus
                   type="text" 
+                  maxLength={MAX_TERMINAL_INPUT_LENGTH}
                   value={terminalInput}
-                  onChange={(e) => setTerminalInput(e.target.value)}
+                  onChange={(e) => {
+                    if (e.target.value.length <= MAX_TERMINAL_INPUT_LENGTH) {
+                      setTerminalInput(e.target.value);
+                    }
+                  }}
                   placeholder="Enter runspace command..."
                   className="bg-transparent border-none outline-none flex-1 text-zinc-300 font-mono text-xs font-bold"
-                 />
+                  aria-label="Terminal command input"
+                />
               </form>
             </div>
           )}
@@ -161,13 +214,18 @@ const App: React.FC = () => {
       </main>
 
       <JobOverlay jobs={jobs} />
-      <AIAssistant />
-    </div>
+      </div>
+    </ErrorBoundary>
   );
 };
 
-const NavItem = ({ active, onClick, icon, label }: any) => (
-  <button onClick={onClick} className={`w-full flex items-center gap-4 px-5 py-3.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${active ? 'bg-blue-600 text-white shadow-xl translate-x-1' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900/40'}`}>
+const NavItem: React.FC<NavItemProps> = ({ active, onClick, icon, label }) => (
+  <button 
+    onClick={onClick} 
+    className={`w-full flex items-center gap-4 px-5 py-3.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${active ? 'bg-blue-600 text-white shadow-xl translate-x-1' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900/40'}`}
+    aria-label={`Navigate to ${label}`}
+    aria-current={active ? 'page' : undefined}
+  >
     {icon}{label}
   </button>
 );

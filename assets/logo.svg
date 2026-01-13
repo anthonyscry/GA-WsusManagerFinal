@@ -1,0 +1,16 @@
+<svg viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <!-- Dark blue background -->
+  <rect width="256" height="256" fill="#1e3a8a"/>
+  
+  <!-- Four-pointed star/cross shape - white -->
+  <g transform="translate(128, 128)">
+    <!-- Top point -->
+    <polygon points="0,-80 20,-20 0,0 -20,-20" fill="white"/>
+    <!-- Right point -->
+    <polygon points="80,0 20,20 0,0 20,-20" fill="white"/>
+    <!-- Bottom point -->
+    <polygon points="0,80 -20,20 0,0 20,20" fill="white"/>
+    <!-- Left point -->
+    <polygon points="-80,0 -20,-20 0,0 -20,20" fill="white"/>
+  </g>
+</svg>

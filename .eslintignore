@@ -1,0 +1,9 @@
+node_modules/
+dist/
+release/
+build/
+*.config.js
+*.config.ts
+main.js
+coverage/
+.vite/

@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json.schemastore.org/cursor-agents",
+  "version": "1.0",
+  "agents": {
+    "project-lead": {
+      "name": "Project Lead",
+      "role": "Orchestration, decisions, coordination",
+      "promptFile": "AI_AGENTS.md",
+      "section": "TAB 1: 👔 PROJECT LEAD",
+      "enabled": true,
+      "priority": 1
+    },
+    "code-validator": {
+      "name": "Code Validator",
+      "role": "Error check, syntax, security scan",
+      "promptFile": "AI_AGENTS.md",
+      "section": "TAB 2: 🔍 CODE VALIDATOR",
+      "enabled": true,
+      "priority": 2
+    },
+    "refactoring-architect": {
+      "name": "Refactoring Architect",
+      "role": "Clean code, modularization",
+      "promptFile": "AI_AGENTS.md",
+      "section": "TAB 3: 🏗️ REFACTORING ARCHITECT",
+      "enabled": true,
+      "priority": 3
+    },
+    "debugger": {
+      "name": "Debugger",
+      "role": "Bug fixing, root cause analysis",
+      "promptFile": "AI_AGENTS.md",
+      "section": "TAB 4: 🐛 DEBUGGER",
+      "enabled": true,
+      "priority": 4
+    },
+    "qa-engineer": {
+      "name": "QA Engineer",
+      "role": "Testing, quality gates",
+      "promptFile": "AI_AGENTS.md",
+      "section": "TAB 5: 🧪 QA ENGINEER",
+      "enabled": true,
+      "priority": 5
+    },
+    "security-analyst": {
+      "name": "Security Analyst",
+      "role": "Vulnerabilities, hardening",
+      "promptFile": "AI_AGENTS.md",
+      "section": "TAB 6: 🔒 SECURITY ANALYST",
+      "enabled": true,
+      "priority": 6
+    },
+    "devops-engineer": {
+      "name": "DevOps Engineer",
+      "role": "CI/CD, deployment",
+      "promptFile": "AI_AGENTS.md",
+      "section": "TAB 7: ⚙️ DEVOPS ENGINEER",
+      "enabled": true,
+      "priority": 7
+    },
+    "documentation-specialist": {
+      "name": "Documentation Specialist",
+      "role": "Docs, comments, guides",
+      "promptFile": "AI_AGENTS.md",
+      "section": "TAB 8: 📝 DOCUMENTATION SPECIALIST",
+      "enabled": true,
+      "priority": 8
+    },
+    "ui-ux-specialist": {
+      "name": "UI/UX Specialist",
+      "role": "Interface, accessibility",
+      "promptFile": "AI_AGENTS.md",
+      "section": "TAB 9: 🎨 UI/UX SPECIALIST",
+      "enabled": true,
+      "priority": 9
+    },
+    "database-architect": {
+      "name": "Database Architect",
+      "role": "Data modeling, queries",
+      "promptFile": "AI_AGENTS.md",
+      "section": "TAB 10: 🗄️ DATABASE ARCHITECT",
+      "enabled": true,
+      "priority": 10
+    },
+    "performance-engineer": {
+      "name": "Performance Engineer",
+      "role": "Speed, optimization",
+      "promptFile": "AI_AGENTS.md",
+      "section": "TAB 11: ⚡ PERFORMANCE ENGINEER",
+      "enabled": true,
+      "priority": 11
+    },
+    "integration-specialist": {
+      "name": "Integration Specialist",
+      "role": "APIs, webhooks",
+      "promptFile": "AI_AGENTS.md",
+      "section": "TAB 12: 🔌 INTEGRATION SPECIALIST",
+      "enabled": true,
+      "priority": 12
+    }
+  },
+  "defaultAgent": "project-lead",
+  "agentSelection": {
+    "autoSelect": true,
+    "contextAware": true,
+    "rules": {
+      "syntax-errors": "code-validator",
+      "refactoring": "refactoring-architect",
+      "bugs": "debugger",
+      "testing": "qa-engineer",
+      "security": "security-analyst",
+      "deployment": "devops-engineer",
+      "documentation": "documentation-specialist",
+      "ui-ux": "ui-ux-specialist",
+      "database": "database-architect",
+      "performance": "performance-engineer",
+      "api-integration": "integration-specialist"
+    }
+  }
+}

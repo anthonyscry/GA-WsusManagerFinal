@@ -34,7 +34,7 @@ export interface LogEntry {
   timestamp: string;
   level: LogLevel;
   message: string;
-  context?: any;
+  context?: unknown;
 }
 
 export interface ScheduledTask {
@@ -103,7 +103,7 @@ export interface OperationParameter {
   label: string;
   type: 'select' | 'number' | 'text';
   options?: string[];
-  defaultValue: any;
+  defaultValue: string | number;
 }
 
 export interface Operation {

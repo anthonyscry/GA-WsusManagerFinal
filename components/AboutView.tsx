@@ -110,7 +110,7 @@ const AboutView: React.FC = () => {
                <div className="min-w-0">
                   <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Developer</p>
                   <h4 className="text-lg font-black text-white tracking-tight truncate">Tony Tran</h4>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight mt-0.5">Created by Tony Tran</p>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight mt-0.5">Creator & Maintainer</p>
                   <a href="mailto:tony.tran@ga-asi.com" className="text-[10px] font-bold text-blue-500/80 hover:text-blue-400 transition-colors mt-2 block tracking-tight">tony.tran@ga-asi.com</a>
                </div>
             </div>
