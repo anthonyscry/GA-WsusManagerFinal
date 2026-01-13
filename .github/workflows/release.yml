@@ -1,0 +1,97 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Triggers on version tags like v3.9.0
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 3.9.0)'
+        required: true
+        type: string
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write  # Required for creating releases
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build application
+        run: npm run build
+
+      - name: Build portable EXE
+        run: npm run build:exe
+
+      - name: Get version from package.json
+        id: package-version
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: GA-WsusManager Pro v${{ steps.package-version.outputs.VERSION }}
+          tag_name: ${{ github.event.inputs.version && format('v{0}', github.event.inputs.version) || github.ref_name }}
+          draft: false
+          prerelease: false
+          files: |
+            release/*.exe
+          body: |
+            ## GA-WsusManager Pro v${{ steps.package-version.outputs.VERSION }}
+
+            ### 🎯 Highlights
+            - Comprehensive security audit and hardening
+            - 109 unit tests for critical functionality
+            - Improved accessibility with keyboard navigation
+            - Better error messages for users
+
+            ### 🔐 Security Improvements
+            - Session-based encryption key derivation (PBKDF2 with 600,000 iterations)
+            - Context-aware PowerShell command whitelisting
+            - SQL injection prevention with parameterized queries
+            - Content Security Policy for Electron
+
+            ### ✅ Test Coverage
+            - Domain entity tests (Computer, EnvironmentStats)
+            - Security tests (SQL validation, PowerShell sanitization, crypto)
+            - Use case integration tests
+
+            ### ♿ Accessibility
+            - Focus trap for modal dialogs
+            - Keyboard shortcuts documentation
+            - ARIA labels for screen readers
+
+            ### 🎨 UX Improvements
+            - Skeleton loading components
+            - Friendly error messages with `useToast()` hook
+            - Retry logic with exponential backoff
+
+            ### 📦 Installation
+            Download the portable EXE below - no installation required.
+            Run as Administrator for full WSUS management capabilities.
+
+            ### ⚠️ Requirements
+            - Windows Server with WSUS role installed
+            - SQL Server Express (for database operations)
+            - Run as Administrator
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
