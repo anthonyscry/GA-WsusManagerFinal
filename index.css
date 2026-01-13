@@ -1,14 +1,24 @@
-body { 
-  font-family: 'Inter', sans-serif; 
-  background-color: #0a0a0c;
-  color: #e2e8f0;
-  background-image: radial-gradient(circle at 2px 2px, #1e293b 1px, transparent 0);
-  background-size: 40px 40px;
-  font-size: 14px; /* Base font size increased from default */
-  line-height: 1.6; /* Improved readability */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body { 
+    /* System fonts only - no internet required */
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; 
+    background-color: #0a0a0c;
+    color: #e2e8f0;
+    background-image: radial-gradient(circle at 2px 2px, #1e293b 1px, transparent 0);
+    background-size: 40px 40px;
+    font-size: 14px;
+    line-height: 1.6;
+  }
 }
 
-.mono { font-family: 'JetBrains Mono', monospace; }
+.mono { 
+  /* System monospace fonts - no internet required */
+  font-family: 'Consolas', 'Monaco', 'Courier New', 'Lucida Console', monospace; 
+}
 .sidebar-navy { background-color: #0f172a; }
 .panel-card {
   background: #121216;

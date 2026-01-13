@@ -88,6 +88,7 @@ function createWindow() {
       contextIsolation: false,  // Required for direct Node.js access in this architecture
       // Note: For production, consider migrating to IPC-based architecture
       // For now, this maintains functionality while being aware of security implications
+      webSecurity: true,  // Keep security enabled but allow local file loading
     },
     autoHideMenuBar: true,
     show: false

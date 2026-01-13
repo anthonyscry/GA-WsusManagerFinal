@@ -2,6 +2,19 @@ import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
+// Plugin to remove crossorigin attribute for Electron compatibility
+const removeCrossorigin = () => {
+  return {
+    name: 'remove-crossorigin',
+    transformIndexHtml(html: string) {
+      return html
+        .replace(/crossorigin="anonymous"/g, '')
+        .replace(/crossorigin='anonymous'/g, '')
+        .replace(/crossorigin/g, '');
+    }
+  };
+};
+
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
     return {
@@ -10,7 +23,7 @@ export default defineConfig(({ mode }) => {
         port: 3000,
         host: '0.0.0.0',
       },
-      plugins: [react()],
+      plugins: [react(), removeCrossorigin()],
       define: {
         'process.env.NODE_ENV': JSON.stringify(mode === 'production' ? 'production' : 'development')
       },
@@ -24,7 +37,12 @@ export default defineConfig(({ mode }) => {
         emptyOutDir: true,
         rollupOptions: {
           input: path.resolve(__dirname, 'index.html'),
-          external: ['child_process', 'util', 'fs', 'path']
+          external: ['child_process', 'util', 'fs', 'path'],
+          output: {
+            // Remove crossorigin attribute for Electron file:// protocol compatibility
+            assetFileNames: 'assets/[name]-[hash][extname]',
+            entryFileNames: 'assets/[name]-[hash].js',
+          }
         },
       },
       optimizeDeps: {
