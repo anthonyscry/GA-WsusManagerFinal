@@ -1,10 +1,24 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { exec } = require('child_process');
 const { promisify } = require('util');
 
 const execAsync = promisify(exec);
+
+// Content Security Policy for production
+// Restricts resource loading to local files only
+const CSP_POLICY = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'",  // Required for Vite bundled scripts
+  "style-src 'self' 'unsafe-inline'",   // Required for Tailwind/styled-components
+  "img-src 'self' data: blob:",         // Allow local images and data URIs
+  "font-src 'self'",                    // System fonts only
+  "connect-src 'self'",                 // No external network requests
+  "frame-src 'none'",                   // No iframes
+  "object-src 'none'",                  // No plugins
+  "base-uri 'self'",                    // Restrict base URL
+].join('; ');
 
 // Store reference to main window
 let mainWindow = null;
@@ -114,6 +128,16 @@ function createWindow() {
       console.error('Index file not found at:', indexPath);
     }
   }
+
+  // Apply Content Security Policy headers
+  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [CSP_POLICY],
+      },
+    });
+  });
 
   mainWindow.once('ready-to-show', () => {
     if (mainWindow && !mainWindow.isDestroyed()) {

@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React from 'react';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 export interface ConfirmDialogProps {
   isOpen: boolean;
@@ -21,30 +22,13 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   onConfirm,
   onCancel
 }) => {
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const cancelButtonRef = useRef<HTMLButtonElement>(null);
-
-  // Handle escape key to close dialog
-  const handleKeyDown = useCallback((event: KeyboardEvent) => {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      onCancel();
-    }
-  }, [onCancel]);
-
-  // Set up keyboard listener and focus management
-  useEffect(() => {
-    if (isOpen) {
-      // Add escape key listener
-      document.addEventListener('keydown', handleKeyDown);
-      // Focus the cancel button for accessibility
-      setTimeout(() => cancelButtonRef.current?.focus(), 0);
-
-      return () => {
-        document.removeEventListener('keydown', handleKeyDown);
-      };
-    }
-  }, [isOpen, handleKeyDown]);
+  // Use focus trap for accessibility - handles escape key and tab trapping
+  const dialogRef = useFocusTrap<HTMLDivElement>({
+    isActive: isOpen,
+    onEscape: onCancel,
+    returnFocusOnDeactivate: true,
+    initialFocus: 'button', // Focus first button (cancel)
+  });
 
   if (!isOpen) return null;
 
@@ -79,7 +63,6 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         </div>
         <div className="p-6 bg-black/40 border-t border-slate-800 flex gap-3">
           <button
-            ref={cancelButtonRef}
             onClick={onCancel}
             className="flex-1 py-3 px-4 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white rounded-lg text-sm font-semibold uppercase tracking-widest transition-all focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
             aria-label={cancelLabel}
