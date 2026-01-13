@@ -1,6 +1,6 @@
 {
   "name": "ga-wsus-manager-pro",
-  "version": "3.8.10",
+  "version": "3.9.0",
   "description": "Standalone Portable WSUS Management Suite",
   "main": "main.js",
   "scripts": {

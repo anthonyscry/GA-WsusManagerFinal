@@ -5,6 +5,63 @@ const STORAGE_KEY = 'wsus_pro_logs';
 const MAX_LOGS = 200;
 const MAX_MESSAGE_LENGTH = 10000;
 
+// Check if running in Electron with IPC available
+const isElectron = typeof window !== 'undefined' &&
+  typeof (window as any).require === 'function';
+
+let ipcRenderer: any = null;
+if (isElectron) {
+  try {
+    const electron = (window as any).require('electron');
+    ipcRenderer = electron.ipcRenderer;
+  } catch (e) {
+    // Not in Electron or IPC not available
+  }
+}
+
+/**
+ * Write log to file via Electron IPC
+ */
+async function writeToFileLog(level: string, message: string, context?: unknown): Promise<void> {
+  if (ipcRenderer) {
+    try {
+      await ipcRenderer.invoke('write-log', level, message, context);
+    } catch (error) {
+      // Silently fail if IPC not available
+      console.warn('Failed to write to file log:', error);
+    }
+  }
+}
+
+/**
+ * Get log file path (Electron only)
+ */
+export async function getLogFilePath(): Promise<string | null> {
+  if (ipcRenderer) {
+    try {
+      return await ipcRenderer.invoke('get-log-path');
+    } catch (error) {
+      return null;
+    }
+  }
+  return null;
+}
+
+/**
+ * Read recent logs from file (Electron only)
+ */
+export async function readFileLog(lines: number = 100): Promise<string[]> {
+  if (ipcRenderer) {
+    try {
+      const result = await ipcRenderer.invoke('read-log-file', lines);
+      return result.success ? result.logs : [];
+    } catch (error) {
+      return [];
+    }
+  }
+  return [];
+}
+
 /**
  * Sanitize log message to prevent XSS and limit length
  */
@@ -67,7 +124,7 @@ class LoggingService {
   private log(level: LogLevel, message: string, context?: unknown) {
     // Sanitize message
     const sanitizedMessage = sanitizeMessage(message);
-    
+
     const entry: LogEntry = {
       id: generateSecureId(),
       timestamp: new Date().toISOString(),
@@ -75,10 +132,13 @@ class LoggingService {
       message: sanitizedMessage,
       context: context ? JSON.parse(JSON.stringify(context)) : undefined  // Deep clone to prevent reference issues
     };
-    
+
     this.logs.push(entry);
     this.persist();
-    
+
+    // Write to file log (Electron only) - fire and forget
+    writeToFileLog(level, sanitizedMessage, context);
+
     // Dispatch event for UI updates if active
     try {
       window.dispatchEvent(new CustomEvent('wsus_log_added', { detail: entry }));
@@ -86,9 +146,12 @@ class LoggingService {
       // Event dispatch might fail in some contexts
       console.warn('Failed to dispatch log event', error);
     }
-    
+
+    // Console output for debugging
     if (level === LogLevel.ERROR) {
       console.error(`[WSUS ${level}] ${sanitizedMessage}`, context);
+    } else if (level === LogLevel.WARNING) {
+      console.warn(`[WSUS ${level}] ${sanitizedMessage}`, context);
     }
   }
 

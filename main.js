@@ -6,6 +6,104 @@ const { promisify } = require('util');
 
 const execAsync = promisify(exec);
 
+// ============================================================================
+// File-based Logging System
+// ============================================================================
+const LOG_DIR = path.join(app.getPath('userData'), 'logs');
+const LOG_FILE = path.join(LOG_DIR, 'wsus-manager.log');
+const MAX_LOG_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_LOG_FILES = 3;
+
+// Ensure log directory exists
+function ensureLogDir() {
+  if (!fs.existsSync(LOG_DIR)) {
+    fs.mkdirSync(LOG_DIR, { recursive: true });
+  }
+}
+
+// Rotate logs if needed
+function rotateLogsIfNeeded() {
+  try {
+    if (!fs.existsSync(LOG_FILE)) return;
+
+    const stats = fs.statSync(LOG_FILE);
+    if (stats.size < MAX_LOG_SIZE) return;
+
+    // Rotate existing log files
+    for (let i = MAX_LOG_FILES - 1; i >= 1; i--) {
+      const oldFile = `${LOG_FILE}.${i}`;
+      const newFile = `${LOG_FILE}.${i + 1}`;
+      if (fs.existsSync(oldFile)) {
+        if (i === MAX_LOG_FILES - 1) {
+          fs.unlinkSync(oldFile); // Delete oldest
+        } else {
+          fs.renameSync(oldFile, newFile);
+        }
+      }
+    }
+
+    // Rename current log to .1
+    fs.renameSync(LOG_FILE, `${LOG_FILE}.1`);
+  } catch (error) {
+    console.error('Failed to rotate logs:', error);
+  }
+}
+
+// Write log entry to file
+function writeToLogFile(level, message, context) {
+  try {
+    ensureLogDir();
+    rotateLogsIfNeeded();
+
+    const timestamp = new Date().toISOString();
+    const contextStr = context ? ` | ${JSON.stringify(context)}` : '';
+    const logLine = `[${timestamp}] [${level.toUpperCase()}] ${message}${contextStr}\n`;
+
+    fs.appendFileSync(LOG_FILE, logLine, 'utf8');
+  } catch (error) {
+    console.error('Failed to write to log file:', error);
+  }
+}
+
+// Log startup info
+function logStartup() {
+  writeToLogFile('INFO', '='.repeat(60));
+  writeToLogFile('INFO', `GA-WsusManager Pro Starting - v${app.getVersion()}`);
+  writeToLogFile('INFO', `Platform: ${process.platform} | Arch: ${process.arch}`);
+  writeToLogFile('INFO', `Electron: ${process.versions.electron} | Node: ${process.versions.node}`);
+  writeToLogFile('INFO', `User Data: ${app.getPath('userData')}`);
+  writeToLogFile('INFO', `Log File: ${LOG_FILE}`);
+  writeToLogFile('INFO', '='.repeat(60));
+}
+
+// IPC handler for logging from renderer
+ipcMain.handle('write-log', async (event, level, message, context) => {
+  writeToLogFile(level, message, context);
+  return true;
+});
+
+// IPC handler to get log file path
+ipcMain.handle('get-log-path', async () => {
+  return LOG_FILE;
+});
+
+// IPC handler to read recent logs
+ipcMain.handle('read-log-file', async (event, lines = 100) => {
+  try {
+    if (!fs.existsSync(LOG_FILE)) {
+      return { success: true, logs: [] };
+    }
+
+    const content = fs.readFileSync(LOG_FILE, 'utf8');
+    const allLines = content.split('\n').filter(line => line.trim());
+    const recentLines = allLines.slice(-lines);
+
+    return { success: true, logs: recentLines };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
 // Content Security Policy for production
 // Restricts resource loading to local files only
 const CSP_POLICY = [
@@ -152,6 +250,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  logStartup();
   createWindow();
 });
 

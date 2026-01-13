@@ -677,6 +677,250 @@ class WsusService {
     };
   }
 
+  /**
+   * Auto-fix common WSUS issues
+   * Based on GA-WsusManager patterns: WsusHealth.psm1, WsusServices.psm1
+   */
+  async autoFixCommonIssues(): Promise<{
+    checks: Array<{ name: string; status: 'ok' | 'fixed' | 'failed'; message: string }>;
+    fixed: number;
+    failed: number;
+    ok: number;
+  }> {
+    const checks: Array<{ name: string; status: 'ok' | 'fixed' | 'failed'; message: string }> = [];
+    let fixed = 0;
+    let failed = 0;
+    let ok = 0;
+
+    try {
+      const script = `
+        $results = @()
+
+        # Helper function to start service with retry
+        function Start-ServiceWithRetry {
+          param([string]$ServiceName, [int]$TimeoutSeconds = 30)
+          $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+          if (-not $service) { return $false }
+          if ($service.Status -eq 'Running') { return $true }
+          try {
+            Start-Service $ServiceName -ErrorAction Stop
+            $elapsed = 0
+            while ($elapsed -lt $TimeoutSeconds) {
+              Start-Sleep -Seconds 2
+              $elapsed += 2
+              $service = Get-Service -Name $ServiceName
+              if ($service.Status -eq 'Running') { return $true }
+            }
+            return $false
+          } catch { return $false }
+        }
+
+        # Check 1: SQL Server (must start first - dependency)
+        $sqlServiceName = 'MSSQL$SQLEXPRESS'
+        $sqlService = Get-Service -Name $sqlServiceName -ErrorAction SilentlyContinue
+        if (-not $sqlService) {
+          $sqlServiceName = 'MSSQLSERVER'
+          $sqlService = Get-Service -Name $sqlServiceName -ErrorAction SilentlyContinue
+        }
+        if ($sqlService) {
+          if ($sqlService.Status -ne 'Running') {
+            if (Start-ServiceWithRetry -ServiceName $sqlServiceName -TimeoutSeconds 30) {
+              $results += @{ Name = 'SQL Server'; Status = 'fixed'; Message = 'Service restarted successfully' }
+            } else {
+              $results += @{ Name = 'SQL Server'; Status = 'failed'; Message = 'Failed to start service' }
+            }
+          } else {
+            $results += @{ Name = 'SQL Server'; Status = 'ok'; Message = 'Running normally' }
+          }
+        } else {
+          $results += @{ Name = 'SQL Server'; Status = 'failed'; Message = 'Service not found' }
+        }
+
+        # Check 2: IIS Service (dependency for WSUS)
+        $iisService = Get-Service -Name W3SVC -ErrorAction SilentlyContinue
+        if ($iisService) {
+          if ($iisService.Status -ne 'Running') {
+            if (Start-ServiceWithRetry -ServiceName 'W3SVC' -TimeoutSeconds 30) {
+              $results += @{ Name = 'IIS (W3SVC)'; Status = 'fixed'; Message = 'Service restarted successfully' }
+            } else {
+              $results += @{ Name = 'IIS (W3SVC)'; Status = 'failed'; Message = 'Failed to start service' }
+            }
+          } else {
+            $results += @{ Name = 'IIS (W3SVC)'; Status = 'ok'; Message = 'Running normally' }
+          }
+        } else {
+          $results += @{ Name = 'IIS (W3SVC)'; Status = 'failed'; Message = 'IIS not installed' }
+        }
+
+        # Check 3: WSUS Service (start after SQL and IIS)
+        $wsusService = Get-Service -Name WsusService -ErrorAction SilentlyContinue
+        if ($wsusService) {
+          if ($wsusService.Status -ne 'Running') {
+            if (Start-ServiceWithRetry -ServiceName 'WsusService' -TimeoutSeconds 30) {
+              $results += @{ Name = 'WSUS Service'; Status = 'fixed'; Message = 'Service restarted successfully' }
+            } else {
+              $results += @{ Name = 'WSUS Service'; Status = 'failed'; Message = 'Failed to start service' }
+            }
+          } else {
+            $results += @{ Name = 'WSUS Service'; Status = 'ok'; Message = 'Running normally' }
+          }
+        } else {
+          $results += @{ Name = 'WSUS Service'; Status = 'failed'; Message = 'WSUS not installed' }
+        }
+
+        # Check 4: WsusPool Application Pool
+        try {
+          Import-Module WebAdministration -ErrorAction SilentlyContinue
+          $pool = Get-Item "IIS:\\AppPools\\WsusPool" -ErrorAction SilentlyContinue
+          if ($pool) {
+            if ($pool.State -ne 'Started') {
+              Start-WebAppPool -Name 'WsusPool' -ErrorAction Stop
+              Start-Sleep -Seconds 2
+              $results += @{ Name = 'WsusPool AppPool'; Status = 'fixed'; Message = 'Application pool restarted' }
+            } else {
+              $results += @{ Name = 'WsusPool AppPool'; Status = 'ok'; Message = 'Running normally' }
+            }
+          } else {
+            $results += @{ Name = 'WsusPool AppPool'; Status = 'ok'; Message = 'Not found (may use different name)' }
+          }
+        } catch {
+          $results += @{ Name = 'WsusPool AppPool'; Status = 'ok'; Message = 'WebAdministration not available' }
+        }
+
+        # Check 5: WSUS Content Directory & Permissions
+        $contentPath = (Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Update Services\\Server\\Setup' -Name ContentDir -ErrorAction SilentlyContinue).ContentDir
+        if ($contentPath) {
+          if (Test-Path $contentPath) {
+            # Check permissions - NT AUTHORITY\\NETWORK SERVICE needs read access
+            try {
+              $acl = Get-Acl $contentPath -ErrorAction SilentlyContinue
+              $networkService = $acl.Access | Where-Object { $_.IdentityReference -match 'NETWORK SERVICE' }
+              if ($networkService) {
+                $results += @{ Name = 'Content Directory'; Status = 'ok'; Message = "OK: $contentPath" }
+              } else {
+                # Try to fix permissions
+                try {
+                  $rule = New-Object System.Security.AccessControl.FileSystemAccessRule("NT AUTHORITY\\NETWORK SERVICE", "ReadAndExecute", "ContainerInherit,ObjectInherit", "None", "Allow")
+                  $acl.AddAccessRule($rule)
+                  Set-Acl -Path $contentPath -AclObject $acl -ErrorAction Stop
+                  $results += @{ Name = 'Content Directory'; Status = 'fixed'; Message = 'Added NETWORK SERVICE permissions' }
+                } catch {
+                  $results += @{ Name = 'Content Directory'; Status = 'ok'; Message = "Path exists (couldn't verify permissions)" }
+                }
+              }
+            } catch {
+              $results += @{ Name = 'Content Directory'; Status = 'ok'; Message = "Path exists: $contentPath" }
+            }
+          } else {
+            $results += @{ Name = 'Content Directory'; Status = 'failed'; Message = "Path not found: $contentPath" }
+          }
+        } else {
+          $results += @{ Name = 'Content Directory'; Status = 'ok'; Message = 'Registry key not found' }
+        }
+
+        # Check 6: Firewall Rules for WSUS (ports 8530, 8531)
+        try {
+          $wsusRule = Get-NetFirewallRule -DisplayName '*WSUS*' -ErrorAction SilentlyContinue
+          if ($wsusRule) {
+            $results += @{ Name = 'Firewall Rules'; Status = 'ok'; Message = 'WSUS firewall rules exist' }
+          } else {
+            # Check if ports are open
+            $port8530 = Get-NetFirewallRule | Get-NetFirewallPortFilter | Where-Object { $_.LocalPort -eq '8530' }
+            $port8531 = Get-NetFirewallRule | Get-NetFirewallPortFilter | Where-Object { $_.LocalPort -eq '8531' }
+            if ($port8530 -or $port8531) {
+              $results += @{ Name = 'Firewall Rules'; Status = 'ok'; Message = 'WSUS ports (8530/8531) are open' }
+            } else {
+              # Try to create rules
+              try {
+                New-NetFirewallRule -DisplayName 'WSUS HTTP' -Direction Inbound -Protocol TCP -LocalPort 8530 -Action Allow -ErrorAction Stop | Out-Null
+                New-NetFirewallRule -DisplayName 'WSUS HTTPS' -Direction Inbound -Protocol TCP -LocalPort 8531 -Action Allow -ErrorAction Stop | Out-Null
+                $results += @{ Name = 'Firewall Rules'; Status = 'fixed'; Message = 'Created WSUS firewall rules' }
+              } catch {
+                $results += @{ Name = 'Firewall Rules'; Status = 'ok'; Message = 'Could not verify/create rules' }
+              }
+            }
+          }
+        } catch {
+          $results += @{ Name = 'Firewall Rules'; Status = 'ok'; Message = 'Firewall check skipped' }
+        }
+
+        # Check 7: Disk Space
+        $cDrive = Get-PSDrive C -ErrorAction SilentlyContinue
+        if ($cDrive) {
+          $freeGB = [math]::Round($cDrive.Free / 1GB, 2)
+          if ($freeGB -lt 5) {
+            $results += @{ Name = 'Disk Space'; Status = 'failed'; Message = "Critical: $freeGB GB free" }
+          } elseif ($freeGB -lt 20) {
+            $results += @{ Name = 'Disk Space'; Status = 'ok'; Message = "Warning: $freeGB GB free" }
+          } else {
+            $results += @{ Name = 'Disk Space'; Status = 'ok'; Message = "$freeGB GB free" }
+          }
+        }
+
+        # Check 8: Database Connectivity
+        try {
+          $sqlInstance = 'localhost\\SQLEXPRESS'
+          $conn = New-Object System.Data.SqlClient.SqlConnection
+          $conn.ConnectionString = "Server=$sqlInstance;Database=SUSDB;Integrated Security=True;Connect Timeout=5"
+          $conn.Open()
+          $conn.Close()
+          $results += @{ Name = 'Database (SUSDB)'; Status = 'ok'; Message = 'Connected successfully' }
+        } catch {
+          $results += @{ Name = 'Database (SUSDB)'; Status = 'failed'; Message = 'Cannot connect to SUSDB' }
+        }
+
+        # Check 9: WSUS Server Connection
+        try {
+          Import-Module UpdateServices -ErrorAction SilentlyContinue
+          $wsus = Get-WsusServer -ErrorAction Stop
+          if ($wsus) {
+            $computerCount = (Get-WsusComputer -UpdateServer $wsus -ErrorAction SilentlyContinue).Count
+            $results += @{ Name = 'WSUS Connection'; Status = 'ok'; Message = "Connected ($computerCount computers)" }
+          } else {
+            $results += @{ Name = 'WSUS Connection'; Status = 'failed'; Message = 'Could not connect' }
+          }
+        } catch {
+          $results += @{ Name = 'WSUS Connection'; Status = 'failed'; Message = "Error: $($_.Exception.Message)" }
+        }
+
+        $results | ConvertTo-Json -Compress
+      `;
+
+      const result = await powershellService.execute(script);
+
+      if (result.success && result.stdout) {
+        try {
+          const parsed = JSON.parse(result.stdout) as Array<{ Name: string; Status: string; Message: string }> | { Name: string; Status: string; Message: string };
+          const resultsArray = Array.isArray(parsed) ? parsed : [parsed];
+
+          for (const r of resultsArray) {
+            const status = r.Status.toLowerCase() as 'ok' | 'fixed' | 'failed';
+            checks.push({ name: r.Name, status, message: r.Message });
+
+            if (status === 'fixed') fixed++;
+            else if (status === 'failed') failed++;
+            else ok++;
+          }
+        } catch (parseError) {
+          loggingService.error('Failed to parse autofix results');
+          checks.push({ name: 'Parse Error', status: 'failed', message: 'Could not parse results' });
+          failed++;
+        }
+      } else {
+        loggingService.error(`Autofix script failed: ${result.stderr}`);
+        checks.push({ name: 'Script Execution', status: 'failed', message: result.stderr || 'Unknown error' });
+        failed++;
+      }
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      loggingService.error(`Autofix error: ${errorMessage}`);
+      checks.push({ name: 'Autofix', status: 'failed', message: errorMessage });
+      failed++;
+    }
+
+    return { checks, fixed, failed, ok };
+  }
+
   private mapHealthStatus(status: string): HealthStatus {
     switch (status?.toLowerCase()) {
       case 'healthy':

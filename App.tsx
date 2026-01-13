@@ -130,7 +130,8 @@ const App: React.FC = () => {
           <NavItem active={activeTab === 'computers'} onClick={() => setActiveTab('computers')} icon={<Icons.Computers className="w-4 h-4" />} label="Inventory" />
           <NavItem active={activeTab === 'maintenance'} onClick={() => setActiveTab('maintenance')} icon={<Icons.Maintenance className="w-4 h-4" />} label="Operations" />
           <NavItem active={activeTab === 'automation'} onClick={() => setActiveTab('automation')} icon={<Icons.Automation className="w-4 h-4" />} label="Automation" />
-          <NavItem active={activeTab === 'audit'} onClick={() => setActiveTab('audit')} icon={<Icons.Audit className="w-4 h-4" />} label="Auditing" />
+          {/* Auditing menu hidden for now - enable when STIG features are complete */}
+          {/* <NavItem active={activeTab === 'audit'} onClick={() => setActiveTab('audit')} icon={<Icons.Audit className="w-4 h-4" />} label="Auditing" /> */}
           <div className="my-6 border-t border-slate-800/20 mx-4"></div>
           <NavItem active={activeTab === 'logs'} onClick={() => setActiveTab('logs')} icon={<Icons.Logs className="w-4 h-4" />} label="Full Logs" />
           <NavItem active={activeTab === 'help'} onClick={() => setActiveTab('help')} icon={<Icons.Help className="w-4 h-4" />} label="About" />

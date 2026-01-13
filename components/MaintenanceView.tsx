@@ -72,8 +72,8 @@ const operations: Operation[] = [
       { id: 'installerPath', label: 'Installer File Path (EXE or ZIP)', type: 'text', defaultValue: '' },
       { id: 'saPassword', label: 'SA Password (Required)', type: 'text', defaultValue: '' },
       { id: 'instanceName', label: 'Instance Name', type: 'text', defaultValue: 'SQLEXPRESS' },
-      { id: 'installPath', label: 'Installation Path', type: 'text', defaultValue: 'C:\\Program Files\\Microsoft SQL Server' },
-      { id: 'dataPath', label: 'Data Path', type: 'text', defaultValue: 'C:\\Program Files\\Microsoft SQL Server\\MSSQL16.SQLEXPRESS\\MSSQL\\DATA' }
+      { id: 'installPath', label: 'Installation Path', type: 'text', defaultValue: 'C:\\WSUS\\SQLDB' },
+      { id: 'dataPath', label: 'Data Path', type: 'text', defaultValue: 'C:\\WSUS\\SQLDB\\Data' }
     ]
   },
   { 
@@ -140,6 +140,15 @@ const operations: Operation[] = [
   },
   { id: 'cleanup', name: 'Deep Cleanup', script: 'WsusDatabase.psm1', module: 'WsusDatabase', category: 'Maintenance', modeRequirement: 'Both', isDatabaseOp: true, description: 'Aggressive space recovery for SUSDB metadata and stale content.' },
   { id: 'check', name: 'Health Check', script: 'WsusHealth.psm1', module: 'WsusHealth', category: 'Maintenance', modeRequirement: 'Both', description: 'Verify configuration, registry keys, and port connectivity.' },
+  {
+    id: 'autofix',
+    name: 'Auto-Fix Common Issues',
+    script: 'AutoFix.ps1',
+    module: 'WsusAutoFix',
+    category: 'Maintenance',
+    modeRequirement: 'Both',
+    description: 'Automatically detect and fix common WSUS issues: service restarts, IIS app pool recovery, connection resets, and WSUS configuration problems.'
+  },
   { 
     id: 'decline-superseded', 
     name: 'Decline Superseded', 
@@ -350,6 +359,15 @@ const MaintenanceView: React.FC<MaintenanceViewProps> = ({ isAirGap }) => {
         loggingService.info(`[WSUS]   Old updates declined: ${result.oldDeclined}`);
         loggingService.info(`[WSUS]   Security approved: ${result.approved}`);
         loggingService.info(`[WSUS]   Cleanup: ${result.cleanupSuccess ? 'Success' : 'Failed'}`);
+      } else if (op.id === 'autofix') {
+        const { wsusService } = await import('../services/wsusService');
+        const result = await wsusService.autoFixCommonIssues();
+        loggingService.info(`[AUTOFIX] Common issues check complete:`);
+        result.checks.forEach(check => {
+          const icon = check.status === 'fixed' ? '✓' : check.status === 'ok' ? '○' : '✗';
+          loggingService.info(`[AUTOFIX]   ${icon} ${check.name}: ${check.message}`);
+        });
+        loggingService.info(`[AUTOFIX] Summary: ${result.fixed} fixed, ${result.failed} failed, ${result.ok} ok`);
       } else {
         // For other operations, log execution (would execute real PowerShell scripts here)
         loggingService.info(`[EXEC] Operation "${op.name}" executed`);
