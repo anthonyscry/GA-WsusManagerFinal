@@ -20,6 +20,17 @@
   font-family: 'Consolas', 'Monaco', 'Courier New', 'Lucida Console', monospace; 
 }
 .sidebar-navy { background-color: #0f172a; }
+
+/* Ensure SVG icons stay properly sized */
+nav svg {
+  flex-shrink: 0;
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px;
+  min-height: 16px;
+  max-width: 16px;
+  max-height: 16px;
+}
 .panel-card {
   background: #121216;
   border: 1px solid #1e293b;

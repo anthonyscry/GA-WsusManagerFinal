@@ -236,7 +236,8 @@ const NavItem: React.FC<NavItemProps> = ({ active, onClick, icon, label }) => (
     aria-label={`Navigate to ${label}`}
     aria-current={active ? 'page' : undefined}
   >
-    {icon}{label}
+    <span className="shrink-0 w-4 h-4 flex items-center justify-center">{icon}</span>
+    <span>{label}</span>
   </button>
 );
 
