@@ -21,7 +21,7 @@
 }
 .sidebar-navy { background-color: #0f172a; }
 
-/* Ensure SVG icons stay properly sized */
+/* Ensure SVG icons stay properly sized and styled */
 nav svg {
   flex-shrink: 0;
   width: 16px !important;
@@ -30,6 +30,9 @@ nav svg {
   min-height: 16px;
   max-width: 16px;
   max-height: 16px;
+  fill: none !important;
+  stroke: currentColor !important;
+  stroke-width: 1.5 !important;
 }
 .panel-card {
   background: #121216;
