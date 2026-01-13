@@ -8,6 +8,7 @@ import MaintenanceView from './components/MaintenanceView';
 import AutomationView from './components/AutomationView';
 import AuditView from './components/AuditView';
 import AboutView from './components/AboutView';
+import DeploymentWizard from './components/DeploymentWizard';
 import JobOverlay from './components/JobOverlay';
 import ErrorBoundary from './components/ErrorBoundary';
 import { ToastContainer } from './components/Toast';
@@ -28,7 +29,7 @@ interface NavItemProps {
 }
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'computers' | 'maintenance' | 'automation' | 'logs' | 'audit' | 'help'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'computers' | 'maintenance' | 'automation' | 'logs' | 'audit' | 'setup' | 'help'>('dashboard');
   const [isAirGap, setIsAirGap] = useState(stateService.isAirGap());
   const [refreshTimer, setRefreshTimer] = useState(REFRESH_INTERVAL_SECONDS);
   const [showTerminal, setShowTerminal] = useState(false);
@@ -125,6 +126,7 @@ const App: React.FC = () => {
 
         <div className="flex-1 px-3 space-y-1 overflow-y-auto scrollbar-hide">
           <NavItem active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={<Icons.Dashboard className="w-4 h-4" />} label="Overview" />
+          <NavItem active={activeTab === 'setup'} onClick={() => setActiveTab('setup')} icon={<Icons.Updates className="w-4 h-4" />} label="Deploy" />
           <NavItem active={activeTab === 'computers'} onClick={() => setActiveTab('computers')} icon={<Icons.Computers className="w-4 h-4" />} label="Inventory" />
           <NavItem active={activeTab === 'maintenance'} onClick={() => setActiveTab('maintenance')} icon={<Icons.Maintenance className="w-4 h-4" />} label="Operations" />
           <NavItem active={activeTab === 'automation'} onClick={() => setActiveTab('automation')} icon={<Icons.Automation className="w-4 h-4" />} label="Automation" />
@@ -176,6 +178,7 @@ const App: React.FC = () => {
 
         <div className="flex-1 overflow-y-auto p-10 bg-[#0a0a0c]">
           {activeTab === 'dashboard' && <Dashboard stats={stats} />}
+          {activeTab === 'setup' && <DeploymentWizard />}
           {activeTab === 'computers' && <ComputersTable computers={computers} />}
           {activeTab === 'maintenance' && <MaintenanceView isAirGap={isAirGap} />}
           {activeTab === 'automation' && <AutomationView />}

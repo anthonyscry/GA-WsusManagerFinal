@@ -52,6 +52,23 @@ const ALLOWED_COMMAND_PATTERNS = [
   /^Get-WebConfigurationProperty/i,
   /^Get-WebConfiguration/i,
   /^netsh/i,
+  /^Get-Content/i,
+  /^Select-Object/i,
+  /^Where-Object/i,
+  /^auditpol/i,
+  /^secedit/i,
+  /^Get-NetFirewallProfile/i,
+  /^\[xml\]/i,
+  /^\[System\.IO\.Compression/i,
+  // Deployment commands
+  /^Install-WindowsFeature/i,
+  /^Get-WindowsFeature/i,
+  /^Get-CimInstance/i,
+  /^Set-WsusServerSynchronization/i,
+  /^Get-WsusProduct/i,
+  /^Set-WsusProduct/i,
+  /^Get-WsusClassification/i,
+  /^Set-WsusClassification/i,
 ];
 
 class PowerShellService {
