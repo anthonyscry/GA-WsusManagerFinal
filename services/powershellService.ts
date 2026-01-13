@@ -38,6 +38,20 @@ const ALLOWED_COMMAND_PATTERNS = [
   /^Write-Output/i,
   /^Write-Error/i,
   /^Start-Sleep/i,
+  // Task Scheduler commands
+  /^Register-ScheduledTask/i,
+  /^Unregister-ScheduledTask/i,
+  /^Get-ScheduledTask/i,
+  /^Set-ScheduledTask/i,
+  /^New-ScheduledTaskTrigger/i,
+  /^New-ScheduledTaskAction/i,
+  /^New-ScheduledTaskPrincipal/i,
+  /^New-ScheduledTaskSettingsSet/i,
+  // STIG compliance check commands
+  /^Get-ItemProperty/i,
+  /^Get-WebConfigurationProperty/i,
+  /^Get-WebConfiguration/i,
+  /^netsh/i,
 ];
 
 class PowerShellService {

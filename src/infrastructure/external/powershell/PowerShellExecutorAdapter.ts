@@ -9,13 +9,13 @@ import { powershellService } from '../../../../services/powershellService';
 export class PowerShellExecutorAdapter implements IPowerShellExecutor {
   constructor(private readonly logger: ILogger) {}
 
-  async execute(script: string): Promise<{
+  async execute(script: string, timeout?: number): Promise<{
     success: boolean;
     stdout?: string;
     stderr?: string;
   }> {
     try {
-      const result = await powershellService.execute(script);
+      const result = await powershellService.execute(script, timeout);
       return {
         success: result.success,
         stdout: result.stdout,

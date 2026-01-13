@@ -25,7 +25,7 @@ export interface StigCheck {
   vulnId: string;
   title: string;
   severity: 'CAT I' | 'CAT II' | 'CAT III';
-  status: 'Open' | 'Not_Applicable' | 'Compliant';
+  status: 'Open' | 'Not_Applicable' | 'Compliant' | 'Checking...' | 'Unknown';
   discussion: string;
 }
 

@@ -151,7 +151,8 @@ export function createContainer(): Container {
   container.register(TOKENS.ADD_SCHEDULED_TASK_USE_CASE, () =>
     new AddScheduledTaskUseCase(
       container.resolve(TOKENS.TASK_REPOSITORY),
-      container.resolve(TOKENS.LOGGER)
+      container.resolve(TOKENS.LOGGER),
+      container.resolve(TOKENS.POWERSHELL_EXECUTOR)
     )
   );
 

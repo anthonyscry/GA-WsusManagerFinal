@@ -503,34 +503,34 @@ const MaintenanceView: React.FC<MaintenanceViewProps> = ({ isAirGap }) => {
   }).filter(op => activeCategory === 'All' || op.category === activeCategory);
 
   return (
-    <div className="space-y-6 animate-fadeIn pb-12">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 bg-slate-900/40 border border-slate-800/40 rounded-2xl shadow-inner">
+    <div className="space-y-4 animate-fadeIn pb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-slate-900/40 border border-slate-800/40 rounded-xl shadow-inner">
          <div>
-            <h2 className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-3">Runspace Operations</h2>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Managed pipeline for SUSDB lifecycle</p>
+            <h2 className="text-xs font-black text-white uppercase tracking-widest">Runspace Operations</h2>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Managed pipeline for SUSDB lifecycle</p>
          </div>
-         <div className="flex items-center gap-1 p-1 bg-black/40 border border-slate-800 rounded-xl">
+         <div className="flex items-center gap-1 p-1 bg-black/40 border border-slate-800 rounded-lg">
             {categories.map(cat => (
-              <button key={cat} onClick={() => setActiveCategory(cat)} className={`px-5 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${activeCategory === cat ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-300 hover:text-white hover:bg-slate-800/40'}`}>
+              <button key={cat} onClick={() => setActiveCategory(cat)} className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${activeCategory === cat ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-300 hover:text-white hover:bg-slate-800/40'}`}>
                 {cat}
               </button>
             ))}
          </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {filtered.map(op => (
-          <div key={op.id} className="panel-card p-6 rounded-2xl border-l-2 border-l-slate-800 hover:border-l-blue-600 transition-all flex flex-col justify-between group min-h-[220px] bg-[#121216]/50 shadow-lg">
+          <div key={op.id} className="panel-card p-4 rounded-xl border-l-2 border-l-slate-800 hover:border-l-blue-600 transition-all flex flex-col justify-between group bg-[#121216]/50 shadow-lg">
             <div>
-               <h3 className="text-base font-black text-white tracking-tight">{op.name}</h3>
-               <p className="text-sm text-slate-400 mt-2 leading-relaxed font-medium">{op.description}</p>
+               <h3 className="text-sm font-black text-white tracking-tight">{op.name}</h3>
+               <p className="text-xs text-slate-400 mt-1 leading-relaxed font-medium line-clamp-2">{op.description}</p>
             </div>
-            <div className="mt-8 flex items-center justify-between pt-4 border-t border-slate-800/30">
-               <span className="text-xs mono text-slate-400 font-bold">{op.script}</span>
+            <div className="mt-3 flex items-center justify-between pt-3 border-t border-slate-800/30">
+               <span className="text-[10px] mono text-slate-500 font-bold truncate max-w-[120px]">{op.script}</span>
                <button 
                 disabled={!!runningAction}
                 onClick={() => handleInvoke(op)}
-                className={`px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${runningAction === op.id ? 'bg-amber-600 text-white animate-pulse' : 'bg-slate-900 text-slate-300 hover:bg-white hover:text-black'}`}
+                className={`px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${runningAction === op.id ? 'bg-amber-600 text-white animate-pulse' : 'bg-slate-900 text-slate-300 hover:bg-white hover:text-black'}`}
                >
                  {runningAction === op.id ? 'Running' : 'Invoke'}
                </button>
