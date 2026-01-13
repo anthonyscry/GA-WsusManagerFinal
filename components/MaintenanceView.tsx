@@ -139,7 +139,63 @@ const operations: Operation[] = [
     description: 'Sync with Microsoft, deep cleanup, and automated backup using preconfigured server settings.'
   },
   { id: 'cleanup', name: 'Deep Cleanup', script: 'WsusDatabase.psm1', module: 'WsusDatabase', category: 'Maintenance', modeRequirement: 'Both', isDatabaseOp: true, description: 'Aggressive space recovery for SUSDB metadata and stale content.' },
-  { id: 'check', name: 'Health Check', script: 'WsusHealth.psm1', module: 'WsusHealth', category: 'Maintenance', modeRequirement: 'Both', description: 'Verify configuration, registry keys, and port connectivity.' }
+  { id: 'check', name: 'Health Check', script: 'WsusHealth.psm1', module: 'WsusHealth', category: 'Maintenance', modeRequirement: 'Both', description: 'Verify configuration, registry keys, and port connectivity.' },
+  { 
+    id: 'decline-superseded', 
+    name: 'Decline Superseded', 
+    script: 'DeclineSuperseded.ps1', 
+    module: 'WsusAutomation', 
+    category: 'Maintenance', 
+    modeRequirement: 'Both', 
+    isDatabaseOp: false, 
+    description: 'Automatically decline all superseded updates. These have been replaced by newer versions and should not be deployed.'
+  },
+  { 
+    id: 'decline-old', 
+    name: 'Decline Old Updates', 
+    script: 'DeclineOld.ps1', 
+    module: 'WsusAutomation', 
+    category: 'Maintenance', 
+    modeRequirement: 'Both', 
+    isDatabaseOp: false, 
+    description: 'Decline updates older than 90 days that have not been approved. Keeps WSUS clean and focused on current patches.',
+    parameters: [
+      { id: 'daysOld', label: 'Days Old Threshold', type: 'number', defaultValue: 90 }
+    ]
+  },
+  { 
+    id: 'auto-approve', 
+    name: 'Auto-Approve Security', 
+    script: 'AutoApprove.ps1', 
+    module: 'WsusAutomation', 
+    category: 'Maintenance', 
+    modeRequirement: 'Both', 
+    isDatabaseOp: false, 
+    description: 'Auto-approve Security and Critical updates for All Computers. Only approves non-superseded updates from the last 90 days.',
+    parameters: [
+      { id: 'maxAgeDays', label: 'Max Age (Days)', type: 'number', defaultValue: 90 }
+    ]
+  },
+  { 
+    id: 'configure-products', 
+    name: 'Configure Products', 
+    script: 'ConfigureProducts.ps1', 
+    module: 'WsusAutomation', 
+    category: 'Maintenance', 
+    modeRequirement: 'Both', 
+    isDatabaseOp: false, 
+    description: 'Set WSUS to sync only Windows Server, Windows 10, and Windows 11. Enables Security, Critical, and Update classifications.'
+  },
+  { 
+    id: 'full-maintenance', 
+    name: 'Full Auto-Maintenance', 
+    script: 'FullMaintenance.ps1', 
+    module: 'WsusAutomation', 
+    category: 'Maintenance', 
+    modeRequirement: 'Both', 
+    isDatabaseOp: true, 
+    description: 'Complete maintenance: (1) Decline superseded, (2) Decline >90 days old, (3) Auto-approve security updates, (4) Cleanup.'
+  }
 ];
 
 const MaintenanceView: React.FC<MaintenanceViewProps> = ({ isAirGap }) => {
@@ -263,6 +319,37 @@ const MaintenanceView: React.FC<MaintenanceViewProps> = ({ isAirGap }) => {
         await executeSqlExpressInstall(sanitizedParams);
       } else if (op.id === 'install-ssms') {
         await executeSSMSInstall(sanitizedParams);
+      } else if (op.id === 'decline-superseded') {
+        const { wsusService } = await import('../services/wsusService');
+        const result = await wsusService.declineSupersededUpdates();
+        loggingService.info(`[WSUS] Declined ${result.declined} superseded updates (${result.errors} errors)`);
+      } else if (op.id === 'decline-old') {
+        const daysOld = (sanitizedParams.daysOld as number) || 90;
+        const { wsusService } = await import('../services/wsusService');
+        const result = await wsusService.declineOldUpdates(daysOld);
+        loggingService.info(`[WSUS] Declined ${result.declined} updates older than ${daysOld} days (${result.errors} errors)`);
+      } else if (op.id === 'auto-approve') {
+        const maxAgeDays = (sanitizedParams.maxAgeDays as number) || 90;
+        const { wsusService } = await import('../services/wsusService');
+        const result = await wsusService.autoApproveSecurityUpdates(maxAgeDays);
+        loggingService.info(`[WSUS] Approved ${result.approved} security updates, skipped ${result.skipped} (${result.errors} errors)`);
+      } else if (op.id === 'configure-products') {
+        const { wsusService } = await import('../services/wsusService');
+        const success = await wsusService.configureProductsAndClassifications();
+        if (success) {
+          loggingService.info('[WSUS] Products configured: Windows Server, Windows 10, Windows 11');
+          loggingService.info('[WSUS] Classifications: Security, Critical, Updates, Definition Updates');
+        } else {
+          throw new Error('Failed to configure products');
+        }
+      } else if (op.id === 'full-maintenance') {
+        const { wsusService } = await import('../services/wsusService');
+        const result = await wsusService.runFullMaintenance();
+        loggingService.info(`[WSUS] Full maintenance complete:`);
+        loggingService.info(`[WSUS]   Superseded declined: ${result.supersededDeclined}`);
+        loggingService.info(`[WSUS]   Old updates declined: ${result.oldDeclined}`);
+        loggingService.info(`[WSUS]   Security approved: ${result.approved}`);
+        loggingService.info(`[WSUS]   Cleanup: ${result.cleanupSuccess ? 'Success' : 'Failed'}`);
       } else {
         // For other operations, log execution (would execute real PowerShell scripts here)
         loggingService.info(`[EXEC] Operation "${op.name}" executed`);

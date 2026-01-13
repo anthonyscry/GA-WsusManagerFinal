@@ -69,6 +69,11 @@ const ALLOWED_COMMAND_PATTERNS = [
   /^Set-WsusProduct/i,
   /^Get-WsusClassification/i,
   /^Set-WsusClassification/i,
+  /^Approve-WsusUpdate/i,
+  /^Deny-WsusUpdate/i,
+  /^Get-WsusComputer/i,
+  /^Measure-Object/i,
+  /^ForEach-Object/i,
 ];
 
 class PowerShellService {

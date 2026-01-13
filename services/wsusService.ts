@@ -316,6 +316,352 @@ class WsusService {
     }
   }
 
+  /**
+   * Decline all superseded updates
+   * Superseded updates have been replaced by newer versions and should not be deployed
+   */
+  async declineSupersededUpdates(): Promise<{ declined: number; errors: number }> {
+    try {
+      const script = `
+        $wsus = ${this.getConnectionScript()}
+        $declined = 0
+        $errors = 0
+        
+        Write-Output "[WSUS] Finding superseded updates..."
+        $superseded = Get-WsusUpdate -UpdateServer $wsus | Where-Object {
+          $_.Update.IsSuperseded -eq $true -and $_.Update.IsDeclined -eq $false
+        }
+        
+        $total = ($superseded | Measure-Object).Count
+        Write-Output "[WSUS] Found $total superseded updates to decline"
+        
+        foreach ($update in $superseded) {
+          try {
+            $update.Update.Decline()
+            $declined++
+            if ($declined % 100 -eq 0) {
+              Write-Output "[WSUS] Declined $declined of $total..."
+            }
+          } catch {
+            $errors++
+          }
+        }
+        
+        Write-Output "[WSUS] Complete: Declined $declined updates, $errors errors"
+        [PSCustomObject]@{ Declined = $declined; Errors = $errors } | ConvertTo-Json -Compress
+      `;
+
+      loggingService.info('[WSUS] Starting decline of superseded updates...');
+      const result = await powershellService.execute(script, 1800000); // 30 minute timeout
+
+      if (result.stdout) {
+        result.stdout.split('\n').forEach(line => {
+          if (line.trim().startsWith('[WSUS]')) {
+            loggingService.info(line.trim());
+          }
+        });
+      }
+
+      if (result.success && result.stdout) {
+        try {
+          // Find JSON in output
+          const jsonMatch = result.stdout.match(/\{.*"Declined".*\}/);
+          if (jsonMatch) {
+            const data = JSON.parse(jsonMatch[0]);
+            return { declined: data.Declined || 0, errors: data.Errors || 0 };
+          }
+        } catch {
+          // Parse error, try to extract from log
+        }
+      }
+      
+      return { declined: 0, errors: 0 };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      loggingService.error(`Error declining superseded updates: ${errorMessage}`);
+      return { declined: 0, errors: 1 };
+    }
+  }
+
+  /**
+   * Decline updates older than specified days
+   * Old updates that haven't been deployed shouldn't be kept around
+   */
+  async declineOldUpdates(daysOld: number = 90): Promise<{ declined: number; errors: number }> {
+    try {
+      const script = `
+        $wsus = ${this.getConnectionScript()}
+        $declined = 0
+        $errors = 0
+        $cutoffDate = (Get-Date).AddDays(-${daysOld})
+        
+        Write-Output "[WSUS] Finding updates older than ${daysOld} days (before $($cutoffDate.ToString('yyyy-MM-dd')))..."
+        
+        $oldUpdates = Get-WsusUpdate -UpdateServer $wsus | Where-Object {
+          $_.Update.IsDeclined -eq $false -and
+          $_.Update.CreationDate -lt $cutoffDate -and
+          $_.Update.IsApproved -eq $false
+        }
+        
+        $total = ($oldUpdates | Measure-Object).Count
+        Write-Output "[WSUS] Found $total old updates to decline"
+        
+        foreach ($update in $oldUpdates) {
+          try {
+            $update.Update.Decline()
+            $declined++
+            if ($declined % 100 -eq 0) {
+              Write-Output "[WSUS] Declined $declined of $total..."
+            }
+          } catch {
+            $errors++
+          }
+        }
+        
+        Write-Output "[WSUS] Complete: Declined $declined old updates, $errors errors"
+        [PSCustomObject]@{ Declined = $declined; Errors = $errors } | ConvertTo-Json -Compress
+      `;
+
+      loggingService.info(`[WSUS] Starting decline of updates older than ${daysOld} days...`);
+      const result = await powershellService.execute(script, 1800000); // 30 minute timeout
+
+      if (result.stdout) {
+        result.stdout.split('\n').forEach(line => {
+          if (line.trim().startsWith('[WSUS]')) {
+            loggingService.info(line.trim());
+          }
+        });
+      }
+
+      if (result.success && result.stdout) {
+        try {
+          const jsonMatch = result.stdout.match(/\{.*"Declined".*\}/);
+          if (jsonMatch) {
+            const data = JSON.parse(jsonMatch[0]);
+            return { declined: data.Declined || 0, errors: data.Errors || 0 };
+          }
+        } catch {
+          // Parse error
+        }
+      }
+      
+      return { declined: 0, errors: 0 };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      loggingService.error(`Error declining old updates: ${errorMessage}`);
+      return { declined: 0, errors: 1 };
+    }
+  }
+
+  /**
+   * Configure WSUS products and classifications
+   * Enables only specified products and critical/security classifications
+   */
+  async configureProductsAndClassifications(products: string[] = ['Windows Server', 'Windows 10', 'Windows 11']): Promise<boolean> {
+    try {
+      const productPatterns = products.map(p => `"*${p}*"`).join(', ');
+      
+      const script = `
+        $wsus = ${this.getConnectionScript()}
+        
+        Write-Output "[WSUS] Configuring products and classifications..."
+        
+        # Disable all products first
+        Write-Output "[WSUS] Disabling all products..."
+        Get-WsusProduct -UpdateServer $wsus | Set-WsusProduct -Disable
+        
+        # Enable only specified products
+        Write-Output "[WSUS] Enabling selected products..."
+        $productPatterns = @(${productPatterns})
+        foreach ($pattern in $productPatterns) {
+          Get-WsusProduct -UpdateServer $wsus | Where-Object {
+            $_.Product.Title -like $pattern
+          } | Set-WsusProduct
+          Write-Output "[WSUS] Enabled products matching: $pattern"
+        }
+        
+        # Disable all classifications first
+        Write-Output "[WSUS] Configuring classifications..."
+        Get-WsusClassification -UpdateServer $wsus | Set-WsusClassification -Disable
+        
+        # Enable only critical classifications
+        $enabledClassifications = @(
+          'Critical Updates',
+          'Security Updates', 
+          'Update Rollups',
+          'Updates',
+          'Definition Updates'
+        )
+        
+        Get-WsusClassification -UpdateServer $wsus | Where-Object {
+          $_.Classification.Title -in $enabledClassifications
+        } | Set-WsusClassification
+        
+        Write-Output "[WSUS] Enabled classifications: $($enabledClassifications -join ', ')"
+        
+        # Get and save config
+        $config = $wsus.GetConfiguration()
+        $config.Save()
+        
+        Write-Output "[WSUS] Configuration saved successfully"
+        Write-Output "SUCCESS"
+      `;
+
+      loggingService.info('[WSUS] Configuring products and classifications...');
+      const result = await powershellService.execute(script, 300000); // 5 minute timeout
+
+      if (result.stdout) {
+        result.stdout.split('\n').forEach(line => {
+          if (line.trim().startsWith('[WSUS]')) {
+            loggingService.info(line.trim());
+          }
+        });
+      }
+
+      return result.success && result.stdout.includes('SUCCESS');
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      loggingService.error(`Error configuring products: ${errorMessage}`);
+      return false;
+    }
+  }
+
+  /**
+   * Auto-approve security and critical updates for all computers
+   * Only approves updates for enabled products, not superseded, and not too old
+   */
+  async autoApproveSecurityUpdates(maxAgeDays: number = 90): Promise<{ approved: number; skipped: number; errors: number }> {
+    try {
+      const script = `
+        $wsus = ${this.getConnectionScript()}
+        $approved = 0
+        $skipped = 0
+        $errors = 0
+        $cutoffDate = (Get-Date).AddDays(-${maxAgeDays})
+        
+        Write-Output "[WSUS] Finding security and critical updates to auto-approve..."
+        Write-Output "[WSUS] Max age: ${maxAgeDays} days (after $($cutoffDate.ToString('yyyy-MM-dd')))"
+        
+        # Get the "All Computers" target group
+        $allComputers = $wsus.GetComputerTargetGroups() | Where-Object { $_.Name -eq "All Computers" }
+        
+        if (-not $allComputers) {
+          Write-Error "Could not find 'All Computers' target group"
+          exit 1
+        }
+        
+        # Get unapproved security/critical updates that are:
+        # - Not superseded
+        # - Not declined
+        # - Created within the time window
+        $updates = Get-WsusUpdate -UpdateServer $wsus -Classification SecurityUpdates, CriticalUpdates | Where-Object {
+          $_.Update.IsSuperseded -eq $false -and
+          $_.Update.IsDeclined -eq $false -and
+          $_.Update.CreationDate -ge $cutoffDate -and
+          $_.Update.IsApproved -eq $false
+        }
+        
+        $total = ($updates | Measure-Object).Count
+        Write-Output "[WSUS] Found $total updates to evaluate for approval"
+        
+        foreach ($update in $updates) {
+          try {
+            # Check if update is for enabled products
+            $updateProducts = $update.Update.GetUpdateCategories() | ForEach-Object { $_.Title }
+            
+            # Approve for All Computers group with Install action
+            $update.Update.Approve('Install', $allComputers)
+            $approved++
+            
+            if ($approved % 25 -eq 0) {
+              Write-Output "[WSUS] Approved $approved of $total..."
+            }
+          } catch {
+            if ($_.Exception.Message -match "already approved") {
+              $skipped++
+            } else {
+              $errors++
+            }
+          }
+        }
+        
+        Write-Output "[WSUS] Complete: Approved $approved, Skipped $skipped, Errors $errors"
+        [PSCustomObject]@{ Approved = $approved; Skipped = $skipped; Errors = $errors } | ConvertTo-Json -Compress
+      `;
+
+      loggingService.info(`[WSUS] Starting auto-approval of security updates (max age: ${maxAgeDays} days)...`);
+      const result = await powershellService.execute(script, 1800000); // 30 minute timeout
+
+      if (result.stdout) {
+        result.stdout.split('\n').forEach(line => {
+          if (line.trim().startsWith('[WSUS]')) {
+            loggingService.info(line.trim());
+          }
+        });
+      }
+
+      if (result.success && result.stdout) {
+        try {
+          const jsonMatch = result.stdout.match(/\{.*"Approved".*\}/);
+          if (jsonMatch) {
+            const data = JSON.parse(jsonMatch[0]);
+            return { approved: data.Approved || 0, skipped: data.Skipped || 0, errors: data.Errors || 0 };
+          }
+        } catch {
+          // Parse error
+        }
+      }
+      
+      return { approved: 0, skipped: 0, errors: 0 };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      loggingService.error(`Error auto-approving updates: ${errorMessage}`);
+      return { approved: 0, skipped: 0, errors: 1 };
+    }
+  }
+
+  /**
+   * Run full maintenance cycle:
+   * 1. Decline superseded updates
+   * 2. Decline updates older than 90 days
+   * 3. Auto-approve new security/critical updates
+   * 4. Run cleanup
+   */
+  async runFullMaintenance(): Promise<{
+    supersededDeclined: number;
+    oldDeclined: number;
+    approved: number;
+    cleanupSuccess: boolean;
+  }> {
+    loggingService.info('[WSUS] Starting full maintenance cycle...');
+    
+    // Step 1: Decline superseded
+    loggingService.info('[WSUS] Step 1/4: Declining superseded updates...');
+    const superseded = await this.declineSupersededUpdates();
+    
+    // Step 2: Decline old updates
+    loggingService.info('[WSUS] Step 2/4: Declining updates older than 90 days...');
+    const old = await this.declineOldUpdates(90);
+    
+    // Step 3: Auto-approve security updates
+    loggingService.info('[WSUS] Step 3/4: Auto-approving security updates...');
+    const approved = await this.autoApproveSecurityUpdates(90);
+    
+    // Step 4: Run cleanup
+    loggingService.info('[WSUS] Step 4/4: Running cleanup...');
+    const cleanupSuccess = await this.performCleanup();
+    
+    loggingService.info('[WSUS] Full maintenance cycle complete!');
+    loggingService.info(`[WSUS] Summary: ${superseded.declined} superseded declined, ${old.declined} old declined, ${approved.approved} approved`);
+    
+    return {
+      supersededDeclined: superseded.declined,
+      oldDeclined: old.declined,
+      approved: approved.approved,
+      cleanupSuccess
+    };
+  }
+
   private mapHealthStatus(status: string): HealthStatus {
     switch (status?.toLowerCase()) {
       case 'healthy':
