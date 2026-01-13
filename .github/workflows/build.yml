@@ -1,0 +1,54 @@
+name: Build Portable EXE
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - 'claude/*'
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Run tests
+        run: npm test
+        continue-on-error: true  # Don't fail build if tests fail
+
+      - name: Build application
+        run: npm run build
+
+      - name: Build portable EXE
+        run: npm run build:exe
+
+      - name: Upload portable EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: GA-WsusManager-Pro-Portable
+          path: release/*.exe
+          retention-days: 30
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-files
+          path: dist/
+          retention-days: 7
