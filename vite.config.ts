@@ -8,9 +8,9 @@ const removeCrossorigin = () => {
     name: 'remove-crossorigin',
     transformIndexHtml(html: string) {
       return html
-        .replace(/crossorigin="anonymous"/g, '')
-        .replace(/crossorigin='anonymous'/g, '')
-        .replace(/crossorigin/g, '');
+        .replace(/\s*crossorigin="anonymous"/g, '')
+        .replace(/\s*crossorigin='anonymous'/g, '')
+        .replace(/\s*crossorigin(?=[\s>])/g, '');
     }
   };
 };
