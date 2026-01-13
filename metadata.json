@@ -1,0 +1,7 @@
+{
+  "name": "GA-WsusManager-Final",
+  "description": "Desktop Portable WSUS Management Suite (Electron Build)",
+  "version": "3.9.0",
+  "environment": "Desktop/Win32",
+  "requestFramePermissions": []
+}

@@ -1,11 +1,45 @@
-<div align="center">
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+# GA-WsusManager Pro (v3.8.6)
 
-  <h1>Built with AI Studio</h2>
+Standalone Portable WSUS Management Suite designed for GA-ASI Lab Environments.
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+## 🚀 Quick Start (Local Development)
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+1. **Install Node.js** (v20+ recommended)
+2. **Install Dependencies**:
+   ```bash
+   npm install
+   ```
+3. **Run in Development Mode**:
+   ```bash
+   npm start
+   ```
 
-</div>
+## 🛠 Building the Portable EXE
+
+The project is configured with GitHub Actions. Simply push to `main` and download the artifact from the **Actions** tab.
+
+To build manually on your machine:
+```bash
+npm run build:exe
+```
+The result will be in the `dist/` folder.
+
+## ⚠️ Troubleshooting Git Push Errors
+
+If you see "Something went wrong" when pushing:
+1. Ensure you have a `.gitignore` (added in v3.8.6).
+2. If you are behind the GA proxy, configure git:
+   ```bash
+   git config --global http.proxy http://proxy.ga.com:8080
+   ```
+3. If you accidentally tracked `node_modules`, clear the cache:
+   ```bash
+   git rm -r --cached .
+   git add .
+   git commit -m "fix: apply gitignore"
+   git push
+   ```
+
+## 🔐 Security Note
+Database operations require SQL SA credentials. These are stored in a non-persistent session vault (browser localStorage) and are never sent to external services.
