@@ -88,7 +88,7 @@ test.describe('GA-WsusManager Pro E2E Tests', () => {
     }
   });
 
-  test('Demo mode in Deploy view works', async () => {
+  test('Deploy view shows Start Deployment button', async () => {
     // Navigate to Deploy if not already there
     const deployLink = await page.locator('text=Deploy').first();
     if (await deployLink.isVisible()) {
@@ -96,26 +96,9 @@ test.describe('GA-WsusManager Pro E2E Tests', () => {
       await page.waitForTimeout(500);
     }
     
-    // Click Demo button
-    const demoButton = await page.locator('button:has-text("Demo")');
-    if (await demoButton.isVisible()) {
-      await demoButton.click();
-      
-      // Wait for demo to start
-      await page.waitForTimeout(1000);
-      
-      // Should see progress indicator
-      const progressText = await page.locator('text=Installing').first();
-      const visible = await progressText.isVisible().catch(() => false);
-      
-      // Demo is running if we see "Installing" or progress bar
-      if (visible) {
-        expect(visible).toBe(true);
-      }
-      
-      // Wait for demo to complete
-      await page.waitForTimeout(15000);
-    }
+    // Verify Start Deployment button is visible
+    const deployButton = await page.locator('button:has-text("Start Deployment")');
+    await expect(deployButton).toBeVisible();
   });
 
   test('Navigate to Maintenance view', async () => {

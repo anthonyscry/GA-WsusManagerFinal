@@ -43,39 +43,6 @@ const DeploymentWizard: React.FC = () => {
   const [passwordError, setPasswordError] = useState<string>('');
   const [confirmPassword, setConfirmPassword] = useState<string>('');
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [demoMode, setDemoMode] = useState(false);
-
-  // Demo mode - cycles through deployment steps to show the UI
-  const runDemo = () => {
-    setDemoMode(true);
-    setStep('deploying');
-    const steps = [
-      { step: 'sql-express', progress: 10, message: 'Installing SQL Express...' },
-      { step: 'sql-express', progress: 25, message: 'Configuring SQL Express...' },
-      { step: 'ssms', progress: 40, message: 'Installing SSMS...' },
-      { step: 'ssms', progress: 55, message: 'Configuring SSMS...' },
-      { step: 'wsus-feature', progress: 70, message: 'Installing WSUS Feature...' },
-      { step: 'wsus-config', progress: 85, message: 'Configuring WSUS...' },
-      { step: 'complete', progress: 100, message: 'Deployment complete!' },
-    ];
-    let i = 0;
-    const interval = setInterval(() => {
-      if (i < steps.length) {
-        setProgress(steps[i] as DeploymentProgress);
-        i++;
-      } else {
-        clearInterval(interval);
-        setTimeout(() => {
-          setStep('complete');
-          setTimeout(() => {
-            setStep('config');
-            setDemoMode(false);
-            setProgress({ step: 'idle', progress: 0, message: 'Ready to deploy' });
-          }, 2000);
-        }, 1000);
-      }
-    }, 1500);
-  };
 
   const handleBrowse = async (field: 'sqlExpressInstallerPath' | 'ssmsInstallerPath') => {
     try {
@@ -322,13 +289,6 @@ const DeploymentWizard: React.FC = () => {
 
           {/* Buttons - Fixed at bottom */}
           <div className="mt-3 flex gap-2">
-            <button
-              onClick={runDemo}
-              disabled={demoMode}
-              className="px-4 py-3 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-bold uppercase tracking-wide disabled:opacity-50 transition-all"
-            >
-              Demo
-            </button>
             <button
               onClick={handleStartDeployment}
               disabled={!isFormValid}

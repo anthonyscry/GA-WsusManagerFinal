@@ -6,10 +6,13 @@ This directory contains all project documentation organized by category.
 
 ### `/architecture`
 Architecture documentation and design decisions:
+- `ARCHITECTURE_DIAGRAM.md` - Visual architecture diagrams (includes State Service modular structure)
+- `API_DOCUMENTATION.md` - Complete API reference (hooks, use cases, domain, state modules)
 - `ARCHITECTURE_COMPLETE.md` - Architecture completion status
 - `ARCHITECTURE_IMPLEMENTATION_GUIDE.md` - Implementation guide
 - `ARCHITECTURE_REFACTORING_PLAN.md` - Refactoring plan
 - `README_ARCHITECTURE.md` - Architecture overview
+- `STANDALONE_PORTABILITY.md` - Standalone portable app design
 
 ### `/refactoring`
 Refactoring progress and summaries:
@@ -60,6 +63,9 @@ Project reports and status documents:
 
 - **Getting Started**: See `QUICK_START_GUIDE.md` in root or `docs/`
 - **Architecture**: See `docs/architecture/README_ARCHITECTURE.md`
+- **Architecture Diagrams**: See `docs/architecture/ARCHITECTURE_DIAGRAM.md`
+- **API Reference**: See `docs/architecture/API_DOCUMENTATION.md`
+- **State Service**: See State Service Architecture section in `ARCHITECTURE_DIAGRAM.md`
 - **Debugging**: Start with `docs/debugging/DEBUGGING_QUICK_REFERENCE.md`
 - **Build**: See `docs/build/BUILD_INSTRUCTIONS.md`
 - **Testing**: See `docs/testing/TESTING_READINESS.md`

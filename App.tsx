@@ -137,7 +137,7 @@ const AppContent: React.FC = () => {
           )}
         </div>
 
-        <div className="flex-1 px-2 space-y-1 overflow-y-auto scrollbar-hide">
+        <div className="flex-1 px-2 pt-2 space-y-1 overflow-y-auto scrollbar-hide">
           <NavItem active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={<Icons.Dashboard className="w-4 h-4" />} label="Overview" collapsed={sidebarCollapsed} />
           <NavItem active={activeTab === 'setup'} onClick={() => setActiveTab('setup')} icon={<Icons.Updates className="w-4 h-4" />} label="Deploy" collapsed={sidebarCollapsed} />
           <NavItem active={activeTab === 'computers'} onClick={() => setActiveTab('computers')} icon={<Icons.Computers className="w-4 h-4" />} label="Inventory" collapsed={sidebarCollapsed} />

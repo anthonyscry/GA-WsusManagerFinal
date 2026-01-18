@@ -548,6 +548,149 @@ createContainer(): Container
 
 ---
 
+---
+
+## 📦 State Service Modules
+
+### `JobManager`
+
+**Location**: `services/state/jobManager.ts`
+
+**Description**: Manages background jobs with progress tracking and automatic cleanup.
+
+**Methods**:
+```typescript
+setNotifyCallback(callback: () => void): void
+```
+- Sets callback for state notifications.
+
+```typescript
+getJobs(): BackgroundJob[]
+```
+- Returns a copy of the current jobs array.
+
+```typescript
+startJob(name: string, durationMs?: number, onComplete?: () => void | Promise<void>): string
+```
+- Starts a background job with progress tracking.
+- Returns `jobId`.
+
+```typescript
+cleanupJob(jobId: string): void
+```
+- Removes job and clears its associated timer.
+
+---
+
+### `TerminalHandler`
+
+**Location**: `services/state/terminalHandler.ts`
+
+**Description**: Processes terminal commands with rate limiting and validation.
+
+**Constructor**:
+```typescript
+constructor(
+  getStats: () => { healthyComputers: number; db: { currentSizeGB: number } },
+  reindex: () => void,
+  cleanup: () => void
+)
+```
+
+**Methods**:
+```typescript
+processCommand(cmd: string): void
+```
+- Processes terminal command with rate limiting (10 commands/min).
+- **Supported commands**: `help`, `status`, `ping`, `clear`, `reindex`, `cleanup`.
+
+---
+
+### `StigChecker`
+
+**Location**: `services/state/stigChecker.ts`
+
+**Description**: Handles STIG compliance evaluation logic using PowerShell.
+
+**Methods**:
+```typescript
+getDefaultChecks(): StigCheck[]
+```
+- Returns default STIG checks (initial state).
+
+```typescript
+runComplianceChecks(): Promise<StigCheck[]>
+```
+- Runs actual STIG compliance checks via PowerShell.
+- **Checks**: V-2200 (HTTPS), V-2101 (SQL page verify), V-2554 (WSUS service), V-9932 (IIS), V-3401 (SQL service).
+
+---
+
+### `StorageManager`
+
+**Location**: `services/state/storageManager.ts`
+
+**Description**: Manages `localStorage` persistence layer with debouncing.
+
+**Methods**:
+```typescript
+clearAll(): void
+```
+- Clears all state from `localStorage`.
+
+```typescript
+debouncedPersist(stats: EnvironmentStats, computers: WsusComputer[], tasks: ScheduledTask[]): void
+```
+- Debounced persistence with a 1000ms delay.
+
+---
+
+### `Types`
+
+**Location**: `services/state/types.ts`
+
+**Interfaces**:
+```typescript
+interface BackgroundJob {
+  id: string;
+  name: string;
+  progress: number;
+  status: 'Running' | 'Completed' | 'Failed';
+  startTime: number;
+}
+```
+
+**Constants**:
+- `JOB_PROGRESS_UPDATE_INTERVAL_MS`: 100
+- `MAX_CONCURRENT_JOBS`: 10
+- `MAX_JOB_DURATION_MS`: 600000 (10 minutes)
+- `MAX_COMMANDS_PER_MINUTE`: 10
+- `REFRESH_TIMEOUT_MS`: 30000
+
+**Storage Keys**:
+- `STORAGE_KEY_STATS`: 'wsus_pro_stats'
+- `STORAGE_KEY_COMPUTERS`: 'wsus_pro_computers'
+- `STORAGE_KEY_TASKS`: 'wsus_pro_tasks'
+
+---
+
+### `Utils`
+
+**Location**: `services/state/utils.ts`
+
+**Functions**:
+```typescript
+generateSecureId(): string
+```
+- Generates a secure random ID using the crypto API.
+
+```typescript
+validateHostname(hostname: string | undefined): string | null
+```
+- Validates hostname using a whitelist approach.
+
+---
+
 ## 📦 Standalone Portable App Features
 
 ### No External Dependencies Required

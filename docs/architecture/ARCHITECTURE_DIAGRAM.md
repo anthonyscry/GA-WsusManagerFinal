@@ -88,6 +88,9 @@
 │  • SqlClientAdapter (wraps sqlService)                        │
 │  • PowerShellExecutorAdapter (wraps powershellService)       │
 │                                                              │
+│  State Modules:                                              │
+│  • JobManager, TerminalHandler, StigChecker, StorageManager  │
+│                                                              │
 │  Storage:                                                     │
 │  • LocalStorageAdapter (browser localStorage)                 │
 │                                                              │
@@ -105,6 +108,18 @@
 │  • WSUS Server (optional)                                    │
 │  • SQL Server (optional)                                     │
 └──────────────────────────────────────────────────────────────┘
+```
+
+## State Service Architecture
+
+```
+StateService (Facade)
+  ├── JobManager       - Background job lifecycle
+  ├── TerminalHandler  - Terminal command processing
+  ├── StigChecker      - STIG compliance checks
+  ├── StorageManager   - localStorage persistence
+  ├── types.ts         - Shared types and constants
+  └── utils.ts         - Utility functions
 ```
 
 ## Data Flow
@@ -181,6 +196,12 @@ App.tsx
   │           ├─ MaintenanceView (uses useMaintenance)
   │           ├─ AutomationView (uses useScheduledTasks)
   │           └─ Other views...
+
+StateService (Facade)
+  ├─ JobManager ◄─── Callback (State Notify)
+  ├─ TerminalHandler ◄─ Callbacks (Stats, Reindex, Cleanup)
+  ├─ StigChecker ◄─── Uses PowerShellService
+  └─ StorageManager ◄─ Debounced Persistence
 ```
 
 ## Event-Driven Updates
