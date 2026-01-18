@@ -1,4 +1,4 @@
-import { HealthStatus, getHealthStatusFromLastSync } from '../value-objects/HealthStatus';
+import { HealthStatus, getHealthStatusFromLastSync, parseHealthStatus } from '../value-objects/HealthStatus';
 
 /**
  * Computer Domain Entity
@@ -136,7 +136,7 @@ export class Computer {
       data.name,
       data.ipAddress,
       data.os,
-      HealthStatus[data.status as keyof typeof HealthStatus] || HealthStatus.UNKNOWN,
+      parseHealthStatus(data.status),
       lastSync,
       data.updatesNeeded,
       data.updatesInstalled,
