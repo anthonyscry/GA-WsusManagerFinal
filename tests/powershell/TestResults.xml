@@ -1,0 +1,50 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<test-results xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="nunit_schema_2.5.xsd" name="Pester" total="17" errors="0" failures="0" not-run="0" inconclusive="0" ignored="0" skipped="0" invalid="0" date="2026-01-17" time="19:35:49">
+  <environment clr-version="4.0.30319.42000" user-domain="TRITON-AJT" cwd="C:\Projects\GA-WsusManagerFinal" platform="Microsoft Windows 11 Home|C:\WINDOWS|\Device\Harddisk0\Partition3" machine-name="TRITON-AJT" nunit-version="2.5.8.0" os-version="10.0.26200" user="major" />
+  <culture-info current-culture="en-US" current-uiculture="en-US" />
+  <test-suite type="TestFixture" name="Pester" executed="True" result="Success" success="True" time="1.1914" asserts="0" description="Pester">
+    <results>
+      <test-suite type="TestFixture" name="C:\Projects\GA-WsusManagerFinal\tests\powershell\WSUS.Tests.ps1" executed="True" result="Success" success="True" time="1.1914" asserts="0" description="C:\Projects\GA-WsusManagerFinal\tests\powershell\WSUS.Tests.ps1">
+        <results>
+          <test-suite type="TestFixture" name="WSUS Server Connection" executed="True" result="Success" success="True" time="0.3537" asserts="0" description="WSUS Server Connection">
+            <results>
+              <test-case description="Should connect to WSUS server" name="WSUS Server Connection.Should connect to WSUS server" time="0.1785" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Should return correct server properties" name="WSUS Server Connection.Should return correct server properties" time="0.0153" asserts="0" success="True" result="Success" executed="True" />
+            </results>
+          </test-suite>
+          <test-suite type="TestFixture" name="WSUS Update Management" executed="True" result="Success" success="True" time="0.502" asserts="0" description="WSUS Update Management">
+            <results>
+              <test-case description="Should retrieve all updates" name="WSUS Update Management.Should retrieve all updates" time="0.0102" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Should filter security updates from results" name="WSUS Update Management.Should filter security updates from results" time="0.0177" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Should identify superseded updates" name="WSUS Update Management.Should identify superseded updates" time="0.0082" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Should identify driver updates" name="WSUS Update Management.Should identify driver updates" time="0.0063" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Should approve an update" name="WSUS Update Management.Should approve an update" time="0.072" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Should deny an update" name="WSUS Update Management.Should deny an update" time="0.0157" asserts="0" success="True" result="Success" executed="True" />
+            </results>
+          </test-suite>
+          <test-suite type="TestFixture" name="WSUS Computer Management" executed="True" result="Success" success="True" time="0.6293" asserts="0" description="WSUS Computer Management">
+            <results>
+              <test-case description="Should retrieve all computers" name="WSUS Computer Management.Should retrieve all computers" time="0.0193" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Should have correct computer properties" name="WSUS Computer Management.Should have correct computer properties" time="0.0176" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Should identify stale computers (not synced in 3+ days)" name="WSUS Computer Management.Should identify stale computers (not synced in 3+ days)" time="0.0134" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Should categorize computers by target group" name="WSUS Computer Management.Should categorize computers by target group" time="0.0608" asserts="0" success="True" result="Success" executed="True" />
+            </results>
+          </test-suite>
+          <test-suite type="TestFixture" name="WSUS Health Calculations" executed="True" result="Success" success="True" time="0.6693" asserts="0" description="WSUS Health Calculations">
+            <results>
+              <test-case description="Should calculate compliance percentage correctly" name="WSUS Health Calculations.Should calculate compliance percentage correctly" time="0.0142" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Should categorize health status by last sync time" name="WSUS Health Calculations.Should categorize health status by last sync time" time="0.0197" asserts="0" success="True" result="Success" executed="True" />
+            </results>
+          </test-suite>
+          <test-suite type="TestFixture" name="WSUS Maintenance Operations" executed="True" result="Success" success="True" time="0.7042" asserts="0" description="WSUS Maintenance Operations">
+            <results>
+              <test-case description="Should identify security updates pending approval" name="WSUS Maintenance Operations.Should identify security updates pending approval" time="0.0076" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Should identify superseded updates to decline" name="WSUS Maintenance Operations.Should identify superseded updates to decline" time="0.0103" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Should identify driver updates to decline" name="WSUS Maintenance Operations.Should identify driver updates to decline" time="0.0068" asserts="0" success="True" result="Success" executed="True" />
+            </results>
+          </test-suite>
+        </results>
+      </test-suite>
+    </results>
+  </test-suite>
+</test-results>
