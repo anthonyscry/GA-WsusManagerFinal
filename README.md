@@ -1,7 +1,24 @@
 
-# GA-WsusManager Pro (v3.8.6)
+# GA-WsusManager Pro (v3.8.9)
 
 Standalone Portable WSUS Management Suite designed for GA-ASI Lab Environments.
+
+## ✨ What's New in v3.8.9
+
+### 🔐 Security Hardening (Completed)
+- **Electron Security**: Enabled `contextIsolation: true` and disabled `nodeIntegration` to sandbox the renderer process.
+- **Secure IPC**: Migrated all PowerShell execution to a secure IPC channel (`execute-powershell`) with server-side validation.
+- **Build Integrity**: Integrated `preload.js` into the production build process.
+
+### 🧪 Enhanced Test Infrastructure
+- **Unit Testing**: 19 Jest unit tests covering core services and utilities.
+- **E2E Testing**: 10 Playwright end-to-end tests for critical user flows.
+- **PowerShell Testing**: 17 Pester mock tests for WSUS operation verification.
+
+### 🏗️ Code Modularization
+- **STIG Service**: Refactored into `services/stig/` (7 modular files) for better maintainability.
+- **State Management**: Centralized into `services/state/` (6 specialized files).
+- **WSUS Operations**: Organized within `services/wsus/` for dedicated update management.
 
 ## 🚀 Quick Start (Local Development)
 
@@ -25,6 +42,23 @@ npm run build:exe
 ```
 The result will be in the `dist/` folder.
 
+## 🧪 Testing
+
+The project maintains high reliability through a multi-layered testing approach:
+
+- **Unit Tests (Jest)**: 19 tests for core business logic and utility functions.
+  ```bash
+  npm test
+  ```
+- **E2E Tests (Playwright)**: 10 tests for user interface and workflow validation.
+  ```bash
+  npx playwright test
+  ```
+- **PowerShell Tests (Pester)**: 17 mock tests for WSUS command validation.
+  ```bash
+  powershell ./tests/powershell/Run-WSUSTests.ps1
+  ```
+
 ## ⚠️ Troubleshooting Git Push Errors
 
 If you see "Something went wrong" when pushing:
@@ -42,7 +76,11 @@ If you see "Something went wrong" when pushing:
    ```
 
 ## 🔐 Security Note
-Database operations require SQL SA credentials. These are stored in a non-persistent session vault (browser localStorage) and are never sent to external services.
+
+GA-WsusManager Pro follows the principle of least privilege:
+- **Renderer Sandboxing**: `contextIsolation` is enabled and `nodeIntegration` is disabled for all renderer processes.
+- **Secure IPC**: All privileged operations (PowerShell, File System) are mediated through a secure IPC bridge via `preload.js` with server-side validation in `main.js`.
+- **Session Vault**: SQL credentials and encryption keys are stored in a non-persistent, session-based vault and are never transmitted externally.
 
 ## 🐛 Debugging Resources
 
