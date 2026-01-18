@@ -360,19 +360,14 @@ function createWindow() {
     icon: fs.existsSync(iconPath) ? iconPath : undefined,
     webPreferences: {
       // ========================================================================
-      // SECURITY CONFIGURATION
+      // SECURITY CONFIGURATION - HARDENED
       // ========================================================================
-      // Current: nodeIntegration=true for backward compatibility
-      // Target:  nodeIntegration=false, contextIsolation=true (full security)
-      // 
-      // Migration path:
-      // 1. [DONE] Added preload.js with contextBridge exposing electronAPI
-      // 2. [DONE] Added getElectronAPI() helper in types.ts
-      // 3. [TODO] Migrate renderer code to use window.electronAPI
-      // 4. [TODO] Set nodeIntegration=false, contextIsolation=true
+      // nodeIntegration: false - Renderer cannot use require() or Node.js APIs
+      // contextIsolation: true - Preload script runs in isolated context
+      // preload: Exposes only electronAPI via contextBridge (secure)
       // ========================================================================
-      nodeIntegration: true,       // TODO: Set to false after renderer migration
-      contextIsolation: false,     // TODO: Set to true after renderer migration
+      nodeIntegration: false,      // SECURE: Renderer has no Node.js access
+      contextIsolation: true,      // SECURE: Isolated preload context
       preload: preloadExists ? preloadPath : undefined,  // Load secure API bridge
       webSecurity: true,
     },

@@ -1,257 +1,35 @@
 
-// PowerShell service for Electron - uses Node.js APIs available at runtime
-// Note: This will only work in Electron context, not in browser
+// PowerShell service for Electron - uses secure IPC channel via electronAPI
+// SECURITY: All PowerShell execution goes through main.js IPC handler with server-side validation
 
-interface PowerShellResult {
-  stdout: string;
-  stderr: string;
-  exitCode: number;
-  success: boolean;
-}
-
-// ============================================================================
-// DEFENSE-IN-DEPTH: Renderer-side command allowlist
-// NOTE: The AUTHORITATIVE validation is in main.js (server-side)
-// This is a secondary check - do NOT rely on this for security
-// ============================================================================
-const ALLOWED_COMMAND_PATTERNS = [
-  // WSUS commands
-  /^Get-WsusServer/i,
-  /^Get-WsusComputer/i,
-  /^Get-WsusUpdate/i,
-  /^Invoke-WsusServerSynchronization/i,
-  /^Invoke-WsusServerCleanup/i,
-  /^Get-WsusProduct/i,
-  /^Set-WsusProduct/i,
-  /^Get-WsusClassification/i,
-  /^Set-WsusClassification/i,
-  /^Approve-WsusUpdate/i,
-  /^Deny-WsusUpdate/i,
-  /^Set-WsusServerSynchronization/i,
-  /^Get-ComputerTargetGroup/i,
-  // Windows Service commands
-  /^Get-Service/i,
-  /^Start-Service/i,
-  /^Stop-Service/i,
-  /^Restart-Service/i,
-  // Process commands (read-only)
-  /^Get-Process/i,
-  // Module commands (read-only)
-  /^Get-Module/i,
-  /^Import-Module/i,
-  // SQL commands
-  /^Invoke-Sqlcmd/i,
-  // Data conversion
-  /^ConvertTo-Json/i,
-  /^ConvertFrom-Json/i,
-  // File system (read-only)
-  /^Test-Path/i,
-  /^Get-ChildItem/i,
-  /^Get-Content/i,
-  /^Join-Path/i,
-  // File output (piped only)
-  /\|\s*Out-File/i,
-  // Output commands
-  /^Write-Output/i,
-  /^Write-Error/i,
-  /^Start-Sleep/i,
-  // Task Scheduler commands (read-only)
-  /^Get-ScheduledTask/i,
-  /^Get-ScheduledTaskInfo/i,
-  // STIG compliance check commands (read-only)
-  /^Get-ItemProperty/i,
-  /^Get-WebConfigurationProperty/i,
-  /^Get-WebConfiguration/i,
-  /^netsh\s+(http|firewall)\s+show/i,
-  /^auditpol\s+\/get/i,
-  /^Get-NetFirewallProfile/i,
-  // Deployment commands (read-only)
-  /^Get-WindowsFeature/i,
-  /^Get-CimInstance/i,
-  // Utility commands
-  /^Get-PSDrive/i,
-  /^Get-Command/i,
-  /^Test-NetConnection/i,
-  /^Select-Object/i,
-  /^Where-Object/i,
-  /^ForEach-Object/i,
-  /^Measure-Object/i,
-  // Data structures (safe)
-  /^\[PSCustomObject\]/i,
-];
+import { getElectronAPI, PowerShellResult } from '../types';
 
 class PowerShellService {
-  private nodeModulesAvailable: boolean = false;
-  private execFn: ((command: string, options: unknown, callback: (error: unknown, stdout: string, stderr: string) => void) => void) | null = null;
-  private promisifyFn: ((fn: unknown) => unknown) | null = null;
-
-  constructor() {
-    // Check if we're in Electron context with Node.js APIs
-    // In Electron with nodeIntegration: true, we can use require directly
-    try {
-      if (typeof require !== 'undefined') {
-        // Direct require (works in Electron with nodeIntegration: true)
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const { exec } = require('child_process');
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const { promisify } = require('util');
-        this.execFn = exec;
-        this.promisifyFn = promisify;
-        this.nodeModulesAvailable = !!exec && !!promisify;
-        
-        // Node.js modules loaded successfully
-      } else if (typeof window !== 'undefined' && (window as unknown as { require?: (module: string) => unknown }).require) {
-        // Window.require (older Electron versions)
-        const winRequire = (window as unknown as { require: (module: string) => unknown }).require;
-        const { exec } = winRequire('child_process') as { exec: typeof import('child_process').exec };
-        const { promisify } = winRequire('util') as { promisify: typeof import('util').promisify };
-        this.execFn = exec;
-        this.promisifyFn = promisify;
-        this.nodeModulesAvailable = !!exec && !!promisify;
-        
-        // Node.js modules loaded via window.require
-      } else {
-        // Node.js modules not available - require not found (likely not in Electron context)
-        this.nodeModulesAvailable = false;
-      }
-    } catch (e) {
-      // Failed to load Node.js modules (likely not in Electron context)
-      this.nodeModulesAvailable = false;
-    }
-  }
-
-  /**
-   * Check if command is whitelisted
-   * Checks if the script contains any of the allowed command patterns
-   */
-  private isWhitelistedCommand(command: string): boolean {
-    // For complex scripts, check if they contain allowed commands
-    // This allows scripts with multiple commands, variables, conditionals, etc.
-    const normalizedCommand = command.replace(/\s+/g, ' ').trim();
-    
-    // Check if script contains any allowed command pattern (anywhere in the string)
-    const containsAllowedCommand = ALLOWED_COMMAND_PATTERNS.some(pattern => {
-      // Remove the ^ anchor to check anywhere in the string, not just at start
-      const flexiblePattern = new RegExp(pattern.source.replace('^', ''), pattern.flags);
-      return flexiblePattern.test(normalizedCommand);
-    });
-    
-    if (containsAllowedCommand) {
-      return true;
-    }
-    
-    // Also allow scripts that are clearly PowerShell variable assignments, control flow,
-    // or data manipulation that will be used with whitelisted commands
-    const isVariableAssignment = /\$[a-zA-Z_][a-zA-Z0-9_]*\s*=/.test(normalizedCommand);
-    const isControlFlow = /(if|else|foreach|where-object|select-object|for|while|try|catch)\s*\(/i.test(normalizedCommand);
-    const isDataManipulation = /(ConvertTo-Json|ConvertFrom-Json|Write-Output|Write-Error)/i.test(normalizedCommand);
-    const isPSCustomObject = /\[PSCustomObject\]/.test(normalizedCommand);
-    
-    // If it contains PowerShell constructs that are typically used with whitelisted commands
-    if (isVariableAssignment || isControlFlow || isDataManipulation || isPSCustomObject) {
-      return true;
-    }
-    
-    // Allow module operations
-    if (/Get-Module|Import-Module|Install-Module/i.test(normalizedCommand)) {
-      return true;
-    }
-    
-    return false;
-  }
-
-  /**
-   * Sanitize PowerShell command to prevent injection
-   * Only removes truly dangerous patterns, preserves valid PowerShell syntax
-   */
-  private sanitizePowerShellCommand(command: string): string {
-    // Don't over-sanitize - PowerShell needs $, (), {}, etc.
-    // Only remove dangerous command chaining and injection patterns
-    return command
-      // Remove command chaining operators at line boundaries (but allow in strings)
-      .replace(/(?<!["']);(?![^"']*["'])/g, '')  // Remove semicolons not in quotes
-      .replace(/(?<!["'])\|(?![^"']*["'])/g, '')  // Remove pipes not in quotes (but this might be too aggressive)
-      // Remove backtick command substitution
-      .replace(/`[a-zA-Z]/g, ' ')  // Remove backtick escape sequences
-      // Preserve $ variables, (), {}, [] as they're needed for PowerShell
-      .trim();
-  }
-
   /**
    * Execute a PowerShell command and return the result
+   * Uses secure IPC channel to main process which performs server-side validation
    */
   async execute(command: string, timeout: number = 30000): Promise<PowerShellResult> {
-    if (!this.nodeModulesAvailable) {
+    const electronAPI = getElectronAPI();
+    
+    if (!electronAPI) {
       return {
         stdout: '',
-        stderr: 'PowerShell execution not available (not in Electron context or Node.js modules not loaded)',
-        exitCode: 1,
-        success: false
-      };
-    }
-
-    // Validate command is whitelisted
-    if (!this.isWhitelistedCommand(command)) {
-      return {
-        stdout: '',
-        stderr: 'Command not whitelisted for security',
+        stderr: 'PowerShell execution not available (not in Electron context)',
         exitCode: 1,
         success: false
       };
     }
 
     try {
-      if (!this.execFn || !this.promisifyFn) {
-        // Try to get modules again
-        if (typeof require !== 'undefined') {
-          // eslint-disable-next-line @typescript-eslint/no-var-requires
-          const { exec } = require('child_process');
-          // eslint-disable-next-line @typescript-eslint/no-var-requires
-          const { promisify } = require('util');
-          this.execFn = exec;
-          this.promisifyFn = promisify;
-        } else if (typeof window !== 'undefined' && (window as unknown as { require?: (module: string) => unknown }).require) {
-          const winRequire = (window as unknown as { require: (module: string) => unknown }).require;
-          const { exec } = winRequire('child_process') as { exec: typeof import('child_process').exec };
-          const { promisify } = winRequire('util') as { promisify: typeof import('util').promisify };
-          this.execFn = exec;
-          this.promisifyFn = promisify;
-        }
-      }
-      
-      if (!this.execFn || !this.promisifyFn) {
-        throw new Error('Node.js modules not available');
-      }
-      
-      const execAsync = this.promisifyFn(this.execFn) as (
-        command: string,
-        options: { timeout: number; maxBuffer: number }
-      ) => Promise<{ stdout: string; stderr: string }>;
-      
-      // Escape quotes for command line (but don't over-sanitize the command itself)
-      // The whitelist check already ensures only safe commands are executed
-      const escapedCommand = command.replace(/"/g, '\\"').replace(/\$/g, '`$');
-      
-      // Use PowerShell Core (pwsh) if available, otherwise fall back to Windows PowerShell (powershell)
-      const psCommand = `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "${escapedCommand}"`;
-      
-      const { stdout, stderr } = await execAsync(psCommand, {
-        timeout,
-        maxBuffer: 10 * 1024 * 1024 // 10MB buffer
-      });
-
-      return {
-        stdout: stdout.trim(),
-        stderr: stderr.trim(),
-        exitCode: 0,
-        success: true
-      };
+      // Use secure IPC channel - server-side validation happens in main.js
+      return await electronAPI.executePowerShell(command, timeout);
     } catch (error: unknown) {
-      const errorObj = error as { stdout?: string; stderr?: string; message?: string; code?: number };
+      const errorObj = error as { message?: string };
       return {
-        stdout: errorObj.stdout || '',
-        stderr: errorObj.stderr || errorObj.message || '',
-        exitCode: errorObj.code || 1,
+        stdout: '',
+        stderr: errorObj.message || 'Unknown error executing PowerShell',
+        exitCode: 1,
         success: false
       };
     }
@@ -261,7 +39,7 @@ class PowerShellService {
    * Execute a PowerShell script file with path validation
    */
   async executeScript(scriptPath: string, parameters: Record<string, string> = {}): Promise<PowerShellResult> {
-    // Validate script path (would need path module, but keeping simple for now)
+    // Validate script path
     if (!scriptPath || scriptPath.length > 500) {
       return {
         stdout: '',
