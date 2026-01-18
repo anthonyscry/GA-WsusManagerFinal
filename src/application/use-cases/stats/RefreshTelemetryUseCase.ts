@@ -7,7 +7,7 @@ import { IEventBus } from '../../events/IEventBus';
 import { ExternalServiceError } from '../../../domain/errors/ExternalServiceError';
 import { StatsCalculator } from '../../../domain/services/StatsCalculator';
 import { EnvironmentStats } from '../../../domain/entities/EnvironmentStats';
-import { Computer } from '../../../domain/entities/Computer';
+// Computer type used in computerRepo operations
 
 /**
  * Refresh Telemetry Use Case
@@ -80,6 +80,7 @@ export class RefreshTelemetryUseCase {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private toEnvironmentStats(data: any): EnvironmentStats {
     // Convert from plain object to entity
     return new EnvironmentStats(

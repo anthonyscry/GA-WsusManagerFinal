@@ -11,7 +11,7 @@ export class HelpCommand implements ICommand {
 
   constructor(private readonly commandHandler: ICommandHandler) {}
 
-  async execute(args: string[]): Promise<string> {
+  async execute(_args: string[]): Promise<string> {
     const commands = this.commandHandler.getAvailableCommands();
     if (commands.length === 0) {
       return 'No commands available';

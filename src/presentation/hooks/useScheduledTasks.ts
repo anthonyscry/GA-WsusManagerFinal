@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useService } from '../context/ServiceContext';
 import { TOKENS } from '../../di/tokens';
-import { ITaskRepository } from '../../domain/repositories/ITaskRepository';
 import { ScheduledTask } from '../../domain/entities/ScheduledTask';
 import { AddScheduledTaskUseCase } from '../../application/use-cases/tasks/AddScheduledTaskUseCase';
 import { GetScheduledTasksUseCase } from '../../application/use-cases/tasks/GetScheduledTasksUseCase';
@@ -10,7 +9,6 @@ import { GetScheduledTasksUseCase } from '../../application/use-cases/tasks/GetS
  * Hook for managing scheduled tasks
  */
 export function useScheduledTasks() {
-  const taskRepo = useService<ITaskRepository>(TOKENS.TASK_REPOSITORY);
   const addTaskUseCase = useService<AddScheduledTaskUseCase>(TOKENS.ADD_SCHEDULED_TASK_USE_CASE);
   const getTasksUseCase = useService<GetScheduledTasksUseCase>(TOKENS.GET_SCHEDULED_TASKS_USE_CASE);
   
@@ -37,6 +35,8 @@ export function useScheduledTasks() {
     name: string;
     trigger: 'Daily' | 'Weekly' | 'Monthly';
     time: string;
+    dayOfMonth?: number;
+    daysOfWeek?: string[];
   }) => {
     setError(null);
     

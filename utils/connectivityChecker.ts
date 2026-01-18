@@ -13,6 +13,10 @@ let connectivityCheckInterval: NodeJS.Timeout | null = null;
 let lastKnownStatus: boolean = true;
 const connectivityListeners: Set<(isOnline: boolean) => void> = new Set();
 
+// Store event handler references for proper cleanup
+let onlineHandler: (() => void) | null = null;
+let offlineHandler: (() => void) | null = null;
+
 /**
  * Check if internet connectivity is available for WSUS sync
  * Uses navigator.onLine API - works offline without external requests
@@ -55,21 +59,24 @@ export function startConnectivityMonitoring(
     }, CONNECTIVITY_CHECK_INTERVAL_MS);
   }
 
-  // Also listen to browser online/offline events
-  if (typeof window !== 'undefined') {
-    window.addEventListener('online', () => {
+  // Also listen to browser online/offline events (only add once)
+  if (typeof window !== 'undefined' && !onlineHandler) {
+    onlineHandler = () => {
       checkConnectivity().then(isOnline => {
         if (isOnline !== lastKnownStatus) {
           lastKnownStatus = isOnline;
           notifyListeners(isOnline);
         }
       });
-    });
+    };
 
-    window.addEventListener('offline', () => {
+    offlineHandler = () => {
       lastKnownStatus = false;
       notifyListeners(false);
-    });
+    };
+
+    window.addEventListener('online', onlineHandler);
+    window.addEventListener('offline', offlineHandler);
   }
 }
 
@@ -81,9 +88,24 @@ export function stopConnectivityMonitoring(
 ): void {
   connectivityListeners.delete(onStatusChange);
 
-  if (connectivityListeners.size === 0 && connectivityCheckInterval) {
-    clearInterval(connectivityCheckInterval);
-    connectivityCheckInterval = null;
+  if (connectivityListeners.size === 0) {
+    // Clean up interval
+    if (connectivityCheckInterval) {
+      clearInterval(connectivityCheckInterval);
+      connectivityCheckInterval = null;
+    }
+    
+    // Clean up event listeners to prevent memory leaks
+    if (typeof window !== 'undefined') {
+      if (onlineHandler) {
+        window.removeEventListener('online', onlineHandler);
+        onlineHandler = null;
+      }
+      if (offlineHandler) {
+        window.removeEventListener('offline', offlineHandler);
+        offlineHandler = null;
+      }
+    }
   }
 }
 

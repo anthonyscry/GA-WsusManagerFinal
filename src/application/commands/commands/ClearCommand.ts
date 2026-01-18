@@ -11,7 +11,7 @@ export class ClearCommand implements ICommand {
 
   constructor(private readonly loggingService: LoggingServiceAdapter) {}
 
-  async execute(args: string[]): Promise<string> {
+  async execute(_args: string[]): Promise<string> {
     this.loggingService.clearLogs();
     return 'Logs cleared';
   }

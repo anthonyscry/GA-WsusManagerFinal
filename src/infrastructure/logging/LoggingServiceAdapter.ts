@@ -1,4 +1,3 @@
-import { ILogger } from './ILogger';
 import { Logger } from './Logger';
 import { loggingService } from '../../../services/loggingService';
 import { LogEntry } from '../../../types';

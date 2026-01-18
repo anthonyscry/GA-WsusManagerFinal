@@ -11,7 +11,7 @@ export class CleanupCommand implements ICommand {
 
   constructor(private readonly cleanupUseCase: PerformCleanupUseCase) {}
 
-  async execute(args: string[]): Promise<string> {
+  async execute(_args: string[]): Promise<string> {
     await this.cleanupUseCase.execute();
     return 'WSUS cleanup started';
   }

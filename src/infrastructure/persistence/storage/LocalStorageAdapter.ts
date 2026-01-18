@@ -10,10 +10,8 @@ export class LocalStorageAdapter implements IStorage {
       const item = localStorage.getItem(key);
       if (!item) return null;
       return JSON.parse(item) as T;
-    } catch (error: unknown) {
-      // Log error but don't expose details
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      // Use a logging service if available, otherwise silent fail
+    } catch {
+      // Silent fail on parse errors - return null for missing/invalid data
       return null;
     }
   }

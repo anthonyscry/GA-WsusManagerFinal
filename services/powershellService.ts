@@ -9,71 +9,75 @@ interface PowerShellResult {
   success: boolean;
 }
 
-// Whitelist of allowed PowerShell commands/modules
+// ============================================================================
+// DEFENSE-IN-DEPTH: Renderer-side command allowlist
+// NOTE: The AUTHORITATIVE validation is in main.js (server-side)
+// This is a secondary check - do NOT rely on this for security
+// ============================================================================
 const ALLOWED_COMMAND_PATTERNS = [
+  // WSUS commands
   /^Get-WsusServer/i,
   /^Get-WsusComputer/i,
   /^Get-WsusUpdate/i,
   /^Invoke-WsusServerSynchronization/i,
   /^Invoke-WsusServerCleanup/i,
-  /^Get-Service/i,
-  /^Stop-Service/i,
-  /^Get-Process/i,
-  /^Stop-Process/i,
-  /^Get-PSDrive/i,
-  /^Get-Module/i,
-  /^Import-Module/i,
-  /^Install-Module/i,
-  /^Invoke-Sqlcmd/i,
-  /^ConvertTo-Json/i,
-  /^ConvertFrom-Json/i,
-  /^Invoke-WebRequest/i,
-  /^Start-Process/i,
-  /^Test-Path/i,
-  /^Remove-Item/i,
-  /^New-Item/i,
-  /^Get-ChildItem/i,
-  /^Add-Type/i,
-  /^Out-File/i,
-  /^Write-Output/i,
-  /^Write-Error/i,
-  /^Start-Sleep/i,
-  // Task Scheduler commands
-  /^Register-ScheduledTask/i,
-  /^Unregister-ScheduledTask/i,
-  /^Get-ScheduledTask/i,
-  /^Set-ScheduledTask/i,
-  /^New-ScheduledTaskTrigger/i,
-  /^New-ScheduledTaskAction/i,
-  /^New-ScheduledTaskPrincipal/i,
-  /^New-ScheduledTaskSettingsSet/i,
-  // STIG compliance check commands
-  /^Get-ItemProperty/i,
-  /^Get-WebConfigurationProperty/i,
-  /^Get-WebConfiguration/i,
-  /^netsh/i,
-  /^Get-Content/i,
-  /^Select-Object/i,
-  /^Where-Object/i,
-  /^auditpol/i,
-  /^secedit/i,
-  /^Get-NetFirewallProfile/i,
-  /^\[xml\]/i,
-  /^\[System\.IO\.Compression/i,
-  // Deployment commands
-  /^Install-WindowsFeature/i,
-  /^Get-WindowsFeature/i,
-  /^Get-CimInstance/i,
-  /^Set-WsusServerSynchronization/i,
   /^Get-WsusProduct/i,
   /^Set-WsusProduct/i,
   /^Get-WsusClassification/i,
   /^Set-WsusClassification/i,
   /^Approve-WsusUpdate/i,
   /^Deny-WsusUpdate/i,
-  /^Get-WsusComputer/i,
-  /^Measure-Object/i,
+  /^Set-WsusServerSynchronization/i,
+  /^Get-ComputerTargetGroup/i,
+  // Windows Service commands
+  /^Get-Service/i,
+  /^Start-Service/i,
+  /^Stop-Service/i,
+  /^Restart-Service/i,
+  // Process commands (read-only)
+  /^Get-Process/i,
+  // Module commands (read-only)
+  /^Get-Module/i,
+  /^Import-Module/i,
+  // SQL commands
+  /^Invoke-Sqlcmd/i,
+  // Data conversion
+  /^ConvertTo-Json/i,
+  /^ConvertFrom-Json/i,
+  // File system (read-only)
+  /^Test-Path/i,
+  /^Get-ChildItem/i,
+  /^Get-Content/i,
+  /^Join-Path/i,
+  // File output (piped only)
+  /\|\s*Out-File/i,
+  // Output commands
+  /^Write-Output/i,
+  /^Write-Error/i,
+  /^Start-Sleep/i,
+  // Task Scheduler commands (read-only)
+  /^Get-ScheduledTask/i,
+  /^Get-ScheduledTaskInfo/i,
+  // STIG compliance check commands (read-only)
+  /^Get-ItemProperty/i,
+  /^Get-WebConfigurationProperty/i,
+  /^Get-WebConfiguration/i,
+  /^netsh\s+(http|firewall)\s+show/i,
+  /^auditpol\s+\/get/i,
+  /^Get-NetFirewallProfile/i,
+  // Deployment commands (read-only)
+  /^Get-WindowsFeature/i,
+  /^Get-CimInstance/i,
+  // Utility commands
+  /^Get-PSDrive/i,
+  /^Get-Command/i,
+  /^Test-NetConnection/i,
+  /^Select-Object/i,
+  /^Where-Object/i,
   /^ForEach-Object/i,
+  /^Measure-Object/i,
+  // Data structures (safe)
+  /^\[PSCustomObject\]/i,
 ];
 
 class PowerShellService {

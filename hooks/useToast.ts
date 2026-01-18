@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Toast } from '../components/Toast';
 
 let toastIdCounter = 0;
@@ -13,6 +13,19 @@ export function useToast() {
     setToasts(prev => [...prev, newToast]);
     
     return id;
+  }, []);
+
+  // Listen for global toast events from toastService
+  useEffect(() => {
+    const handleGlobalToast = (event: CustomEvent<Toast>) => {
+      const { id, message, type, duration } = event.detail;
+      setToasts(prev => [...prev, { id, message, type, duration }]);
+    };
+
+    window.addEventListener('wsus_toast', handleGlobalToast as EventListener);
+    return () => {
+      window.removeEventListener('wsus_toast', handleGlobalToast as EventListener);
+    };
   }, []);
 
   const removeToast = useCallback((id: string) => {

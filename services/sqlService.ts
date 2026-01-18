@@ -51,7 +51,6 @@ class SqlService {
     }
     
     // Check for dangerous keywords
-    const upperQuery = trimmedQuery.toUpperCase();
     for (const keyword of DANGEROUS_KEYWORDS) {
       // Only allow EXEC for specific stored procedures
       if (keyword === 'EXEC' || keyword === 'EXECUTE') {
@@ -87,9 +86,6 @@ class SqlService {
     try {
       // Validate query first
       this.validateQuery(query);
-      
-      // Escape query for PowerShell (but query is already validated)
-      const escapedQuery = query.replace(/'/g, "''").replace(/"/g, '\\"');
       
       // Build secure PowerShell script
       const script = `
@@ -266,7 +262,7 @@ ${query}
   /**
    * Perform database cleanup
    */
-  async performCleanup(saPassword?: string): Promise<boolean> {
+  async performCleanup(_saPassword?: string): Promise<boolean> {
     try {
       // This would typically call WSUS cleanup procedures
       loggingService.info('Database cleanup initiated');

@@ -3,8 +3,8 @@
  * Simple container for managing service dependencies
  */
 export class Container {
-  private services = new Map<string, any>();
-  private factories = new Map<string, () => any>();
+  private services = new Map<string, unknown>();
+  private factories = new Map<string, () => unknown>();
 
   /**
    * Register a factory function
@@ -26,7 +26,7 @@ export class Container {
   resolve<T>(token: string): T {
     // Check if already instantiated
     if (this.services.has(token)) {
-      return this.services.get(token);
+      return this.services.get(token) as T;
     }
 
     // Check if factory exists
@@ -34,7 +34,7 @@ export class Container {
       const instance = this.factories.get(token)!();
       // Cache as singleton
       this.services.set(token, instance);
-      return instance;
+      return instance as T;
     }
 
     throw new Error(`Service not found: ${token}`);

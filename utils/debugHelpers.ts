@@ -5,6 +5,8 @@
  * Use these utilities to quickly diagnose issues during development and production.
  */
 
+/* eslint-disable no-console */
+
 /**
  * Type guard to check if error is an Error instance
  */

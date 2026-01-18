@@ -1,7 +1,7 @@
 import { IWsusClient } from './IWsusClient';
 import { Computer } from '../../../domain/entities/Computer';
 import { EnvironmentStats } from '../../../domain/entities/EnvironmentStats';
-import { HealthStatus, parseHealthStatus } from '../../../domain/value-objects/HealthStatus';
+import { parseHealthStatus } from '../../../domain/value-objects/HealthStatus';
 import { ILogger } from '../../logging/ILogger';
 import { wsusService } from '../../../../services/wsusService';
 
@@ -56,13 +56,11 @@ export class WsusClientAdapter implements IWsusClient {
     }
   }
 
-  async forceComputerSync(computerName: string): Promise<boolean> {
-    try {
-      return await wsusService.forceComputerSync(computerName);
-    } catch (error) {
-      this.logger.error('Failed to force computer sync', { error, computerName });
-      return false;
-    }
+  async forceComputerSync(_computerName: string): Promise<boolean> {
+    // NOTE: forceComputerSync removed - PsExec-based remote execution is a security risk
+    // Users should run 'wuauclt /detectnow' or 'usoclient StartScan' directly on client machines
+    this.logger.warn('forceComputerSync not available - run wuauclt /detectnow on client directly');
+    return false;
   }
 
   async performCleanup(): Promise<boolean> {
@@ -74,6 +72,7 @@ export class WsusClientAdapter implements IWsusClient {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private toComputerEntity(data: any): Computer {
     const lastSync = data.lastSync && data.lastSync !== 'Never'
       ? new Date(data.lastSync)

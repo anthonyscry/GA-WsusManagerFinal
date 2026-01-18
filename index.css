@@ -3,16 +3,59 @@
 /* Tell Tailwind v4 to use our config file for content scanning */
 @config "./tailwind.config.js";
 
+/* CSS Custom Properties for Theming */
+:root {
+  /* Dark theme (default) */
+  --bg-primary: #0a0a0c;
+  --bg-secondary: #121216;
+  --bg-tertiary: #0f172a;
+  --bg-card: #121216;
+  --bg-input: rgba(0, 0, 0, 0.4);
+  --border-primary: #1e293b;
+  --border-secondary: rgba(30, 41, 59, 0.4);
+  --text-primary: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --accent-blue: #3b82f6;
+  --accent-emerald: #10b981;
+  --accent-amber: #f59e0b;
+  --accent-rose: #ef4444;
+  --scrollbar-track: #0a0a0c;
+  --scrollbar-thumb: #1e293b;
+  --dot-color: #1e293b;
+}
+
+[data-theme="light"] {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f1f5f9;
+  --bg-card: #ffffff;
+  --bg-input: rgba(241, 245, 249, 0.8);
+  --border-primary: #e2e8f0;
+  --border-secondary: rgba(226, 232, 240, 0.6);
+  --text-primary: #1e293b;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --accent-blue: #2563eb;
+  --accent-emerald: #059669;
+  --accent-amber: #d97706;
+  --accent-rose: #dc2626;
+  --scrollbar-track: #f1f5f9;
+  --scrollbar-thumb: #cbd5e1;
+  --dot-color: #e2e8f0;
+}
+
 @layer base {
   body { 
     /* System fonts only - no internet required */
     font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; 
-    background-color: #0a0a0c;
-    color: #e2e8f0;
-    background-image: radial-gradient(circle at 2px 2px, #1e293b 1px, transparent 0);
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    background-image: radial-gradient(circle at 2px 2px, var(--dot-color) 1px, transparent 0);
     background-size: 40px 40px;
     font-size: 14px;
     line-height: 1.6;
+    transition: background-color 0.3s ease, color 0.3s ease;
   }
 }
 
@@ -20,7 +63,22 @@
   /* System monospace fonts - no internet required */
   font-family: 'Consolas', 'Monaco', 'Courier New', 'Lucida Console', monospace; 
 }
-.sidebar-navy { background-color: #0f172a; }
+
+.sidebar-navy { 
+  background-color: var(--bg-tertiary); 
+  transition: background-color 0.3s ease;
+}
+
+/* Theme-aware utility classes */
+.bg-theme-primary { background-color: var(--bg-primary); }
+.bg-theme-secondary { background-color: var(--bg-secondary); }
+.bg-theme-card { background-color: var(--bg-card); }
+.bg-theme-input { background-color: var(--bg-input); }
+.border-theme { border-color: var(--border-primary); }
+.border-theme-secondary { border-color: var(--border-secondary); }
+.text-theme-primary { color: var(--text-primary); }
+.text-theme-secondary { color: var(--text-secondary); }
+.text-theme-muted { color: var(--text-muted); }
 
 /* Ensure SVG icons stay properly sized and styled */
 nav svg {
@@ -36,9 +94,10 @@ nav svg {
   stroke-width: 1.5 !important;
 }
 .panel-card {
-  background: #121216;
-  border: 1px solid #1e293b;
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
   backdrop-filter: blur(12px);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 /* Custom Scrollbar for Pro Look */
@@ -47,14 +106,14 @@ nav svg {
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #0a0a0c;
+  background: var(--scrollbar-track);
 }
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: var(--scrollbar-thumb);
   border-radius: 10px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3b82f6;
+  background: var(--accent-blue);
 }
 
 .scrollbar-hide::-webkit-scrollbar { display: none; }

@@ -11,7 +11,7 @@ export class StatusCommand implements ICommand {
 
   constructor(private readonly statsRepo: IStatsRepository) {}
 
-  async execute(args: string[]): Promise<string> {
+  async execute(_args: string[]): Promise<string> {
     const stats = await this.statsRepo.get();
     return `Health: ${stats.healthyComputers} Nodes OK. DB: ${stats.db.currentSizeGB}GB`;
   }

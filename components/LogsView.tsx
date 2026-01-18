@@ -2,19 +2,30 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { LogEntry, LogLevel } from '../types';
 import { loggingService } from '../services/loggingService';
+import { wsusService } from '../services/wsusService';
 
 interface LogsViewProps {
   hideHeader?: boolean;
 }
 
+interface SyncStatus {
+  status: string;
+  lastSyncTime: string;
+  lastSyncResult: string;
+  nextSyncTime: string;
+}
+
 const LogsView: React.FC<LogsViewProps> = ({ hideHeader = false }) => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [filter, setFilter] = useState<LogLevel | 'ALL'>('ALL');
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const refreshLogs = () => {
-      setLogs(loggingService.getLogs().reverse());
+      setLogs(loggingService.getLogs());
     };
     refreshLogs();
 
@@ -26,6 +37,23 @@ const LogsView: React.FC<LogsViewProps> = ({ hideHeader = false }) => {
     };
   }, []);
 
+  // Fetch sync status on mount and after sync
+  const fetchSyncStatus = async () => {
+    try {
+      const status = await wsusService.getSyncStatus();
+      setSyncStatus(status);
+    } catch {
+      // Silently fail - WSUS might not be available
+    }
+  };
+
+  useEffect(() => {
+    fetchSyncStatus();
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchSyncStatus, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -33,6 +61,44 @@ const LogsView: React.FC<LogsViewProps> = ({ hideHeader = false }) => {
   }, [logs]);
 
   const filteredLogs = filter === 'ALL' ? logs : logs.filter(l => l.level === filter);
+
+  const handleSyncNow = async () => {
+    setIsSyncing(true);
+    loggingService.info('[WSUS] Triggering manual synchronization...');
+    try {
+      const result = await wsusService.syncNow();
+      if (result.success) {
+        loggingService.info(`[WSUS] ${result.message}`);
+        // Refresh sync status after triggering sync
+        setTimeout(fetchSyncStatus, 2000);
+      } else {
+        loggingService.error(`[WSUS] Sync failed: ${result.message}`);
+      }
+    } catch (error) {
+      loggingService.error(`[WSUS] Sync error: ${error instanceof Error ? error.message : 'Unknown'}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const getSyncStatusColor = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case 'running': return 'text-amber-500 bg-amber-500/10';
+      case 'notprocessing': return 'text-emerald-500 bg-emerald-500/10';
+      case 'succeeded': return 'text-emerald-500 bg-emerald-500/10';
+      case 'failed': return 'text-rose-500 bg-rose-500/10';
+      default: return 'text-slate-400 bg-slate-500/10';
+    }
+  };
+
+  const handleExportLogs = async (format: 'txt' | 'json' | 'csv') => {
+    setIsExporting(true);
+    try {
+      await loggingService.exportLogs(format);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const getLevelColor = (level: LogLevel) => {
     switch (level) {
@@ -43,63 +109,123 @@ const LogsView: React.FC<LogsViewProps> = ({ hideHeader = false }) => {
   };
 
   return (
-    <div className={`flex flex-col h-full animate-fadeIn ${!hideHeader ? 'pb-8' : ''}`}>
+    <div className={`animate-fadeIn h-full flex flex-col overflow-hidden`}>
       {!hideHeader && (
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h2 className="text-sm font-black text-white uppercase tracking-[0.2em]">System Console</h2>
-            <p className="text-[10px] font-bold text-slate-500 uppercase mt-1 tracking-widest underline decoration-blue-500/30">WsusManager_v3.8.6.log</p>
+        <div className="flex items-center justify-between p-3 bg-theme-card border border-theme-secondary rounded-lg mb-2 shrink-0">
+          <div className="flex items-center gap-3">
+            <h2 className="text-sm font-black text-theme-primary uppercase tracking-wide">System Console</h2>
+            <span className="text-[10px] font-bold text-theme-muted uppercase">v3.8.6</span>
+            
+            {/* Sync Status Indicator */}
+            {syncStatus && (
+              <div className="flex items-center gap-2 ml-2 pl-2 border-l border-theme-secondary">
+                <div className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${getSyncStatusColor(syncStatus.status)}`}>
+                  {syncStatus.status === 'Running' && (
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse mr-1"></span>
+                  )}
+                  {syncStatus.status}
+                </div>
+                <div className="text-[9px] text-theme-muted">
+                  <span className="text-theme-muted">Last:</span> {syncStatus.lastSyncTime}
+                </div>
+              </div>
+            )}
           </div>
           
-          <div className="flex items-center gap-3">
-            <div className="flex p-1 bg-slate-900/50 rounded-lg border border-slate-800/50">
-               {(['ALL', LogLevel.INFO, LogLevel.WARNING, LogLevel.ERROR] as const).map(f => (
-                 <button 
+          <div className="flex items-center gap-2">
+            {/* Sync Now Button */}
+            <button
+              onClick={handleSyncNow}
+              disabled={isSyncing}
+              className="px-3 py-1.5 text-[10px] font-bold uppercase bg-emerald-600 hover:bg-emerald-500 text-white rounded transition-all disabled:opacity-50 flex items-center gap-1.5"
+              title="Trigger WSUS synchronization"
+            >
+              {isSyncing ? (
+                <>
+                  <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Syncing
+                </>
+              ) : (
+                <>
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Sync Now
+                </>
+              )}
+            </button>
+
+            <div className="flex p-0.5 bg-theme-input rounded border border-theme-secondary">
+              {(['ALL', LogLevel.INFO, LogLevel.WARNING, LogLevel.ERROR] as const).map(f => (
+                <button 
                   key={f}
                   onClick={() => setFilter(f)}
-                  className={`px-3 py-1.5 rounded text-[9px] font-black uppercase tracking-widest transition-all ${filter === f ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
-                 >
-                   {f}
-                 </button>
-               ))}
+                  className={`px-2 py-1 rounded text-[10px] font-bold uppercase transition-all ${filter === f ? 'bg-blue-600 text-white' : 'text-theme-secondary hover:text-theme-primary'}`}
+                >
+                  {f}
+                </button>
+              ))}
             </div>
-            <button onClick={() => loggingService.clearLogs()} className="px-4 py-2.5 text-[9px] font-black uppercase tracking-widest text-rose-500/60 hover:text-rose-500 border border-rose-500/20 hover:border-rose-500/50 rounded-lg transition-all">
-              Clear Buffer
+
+            {/* Export Dropdown */}
+            <div className="relative group">
+              <button 
+                disabled={isExporting}
+                className="px-3 py-1.5 text-[10px] font-bold uppercase text-blue-400 hover:text-blue-300 border border-theme-secondary hover:border-blue-500/30 rounded transition-all flex items-center gap-1 disabled:opacity-50"
+              >
+                {isExporting ? 'Exporting...' : 'Export'}
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              <div className="absolute right-0 top-full mt-1 bg-theme-card border border-theme-secondary rounded shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 min-w-[100px]">
+                <button onClick={() => handleExportLogs('txt')} className="block w-full px-3 py-2 text-[10px] font-bold uppercase text-left text-theme-secondary hover:text-theme-primary hover:bg-blue-600/20">Text (.txt)</button>
+                <button onClick={() => handleExportLogs('json')} className="block w-full px-3 py-2 text-[10px] font-bold uppercase text-left text-theme-secondary hover:text-theme-primary hover:bg-blue-600/20">JSON (.json)</button>
+                <button onClick={() => handleExportLogs('csv')} className="block w-full px-3 py-2 text-[10px] font-bold uppercase text-left text-theme-secondary hover:text-theme-primary hover:bg-blue-600/20">CSV (.csv)</button>
+              </div>
+            </div>
+
+            <button 
+              onClick={() => loggingService.clearLogs()} 
+              className="px-3 py-1.5 text-[10px] font-bold uppercase text-rose-500/70 hover:text-rose-500 border border-theme-secondary hover:border-rose-500/30 rounded transition-all"
+            >
+              Clear
             </button>
           </div>
         </div>
       )}
 
-      <div className={`flex-1 overflow-hidden flex flex-col ${!hideHeader ? 'panel-card rounded-2xl bg-black/60 border border-slate-800/60 shadow-2xl' : ''}`}>
-        <div ref={scrollRef} className="flex-1 p-6 font-mono text-[11px] overflow-y-auto scrollbar-hide space-y-1.5">
+      <div className={`flex-1 min-h-0 overflow-hidden flex flex-col bg-theme-card rounded-lg border border-theme-secondary`}>
+        <div ref={scrollRef} className="flex-1 p-4 font-mono text-[11px] overflow-y-auto space-y-1">
           {filteredLogs.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center gap-4">
-               <p className="text-slate-600 font-bold uppercase tracking-widest text-[10px]">Buffer empty.</p>
+            <div className="h-full flex items-center justify-center">
+              <p className="text-theme-muted font-bold uppercase tracking-widest text-[10px]">Buffer empty</p>
             </div>
           ) : (
             filteredLogs.map((log) => (
-              <div key={log.id} className="flex gap-4 group hover:bg-slate-800/20 py-0.5 px-2 rounded -mx-2 transition-colors">
-                <span className="text-slate-700 whitespace-nowrap hidden md:block">[{log.timestamp.split('T')[1].split('.')[0]}]</span>
-                <span className={`font-black uppercase tracking-tighter w-12 flex-shrink-0 ${getLevelColor(log.level)}`}>{log.level}</span>
-                <span className="text-blue-500 font-bold flex-shrink-0 opacity-50">C:\&gt;</span>
-                <span className="text-slate-300 font-medium leading-relaxed">{log.message}</span>
+              <div key={log.id} className="flex gap-3 hover:bg-theme-secondary/20 py-0.5 px-2 rounded -mx-2 transition-colors">
+                <span className="text-theme-muted whitespace-nowrap hidden md:block">[{log.timestamp.split('T')[1].split('.')[0]}]</span>
+                <span className={`font-black uppercase w-10 shrink-0 ${getLevelColor(log.level)}`}>{log.level}</span>
+                <span className="text-blue-500/50 font-bold shrink-0">C:\&gt;</span>
+                <span className="text-theme-primary font-medium leading-relaxed">{log.message}</span>
               </div>
             ))
           )}
         </div>
         
-        <div className="h-10 bg-slate-900/40 border-t border-slate-800/50 px-6 flex items-center justify-between shrink-0">
-           <div className="flex items-center gap-6">
-              <span className="flex items-center gap-2">
-                 <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></div>
-                 <span className="text-[8px] font-black text-emerald-500/70 uppercase tracking-widest">Buffer Listening</span>
-              </span>
-           </div>
-           <span className="text-[9px] font-bold text-slate-700 uppercase tracking-widest">Active Entries: {filteredLogs.length}</span>
+        <div className="h-8 bg-theme-input border-t border-theme-secondary px-4 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2">
+            <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></div>
+            <span className="text-[10px] font-bold text-emerald-500/70 uppercase">Listening</span>
+          </div>
+          <span className="text-[10px] font-bold text-theme-muted uppercase">Entries: {filteredLogs.length}</span>
         </div>
       </div>
     </div>
   );
 };
 
-export default LogsView;
+export default React.memo(LogsView);

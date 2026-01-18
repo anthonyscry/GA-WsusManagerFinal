@@ -2,7 +2,6 @@ import { useState, useCallback } from 'react';
 import { useService } from '../context/ServiceContext';
 import { TOKENS } from '../../di/tokens';
 import { RefreshTelemetryUseCase } from '../../application/use-cases/stats/RefreshTelemetryUseCase';
-import { IEventBus } from '../../application/events/IEventBus';
 
 /**
  * Hook for refreshing telemetry
@@ -10,7 +9,6 @@ import { IEventBus } from '../../application/events/IEventBus';
  */
 export function useRefreshTelemetry() {
   const useCase = useService<RefreshTelemetryUseCase>(TOKENS.REFRESH_TELEMETRY_USE_CASE);
-  const eventBus = useService<IEventBus>(TOKENS.EVENT_BUS);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 

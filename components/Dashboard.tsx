@@ -1,11 +1,12 @@
 
-import React, { useMemo } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
-import { EnvironmentStats } from '../types';
+import React, { useMemo, useState } from 'react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { EnvironmentStats, ServiceState } from '../types';
 import { useResourceMonitoring } from '../hooks/useResourceMonitoring';
 import { useThroughputData } from '../hooks/useThroughputData';
 import { useComplianceTrends } from '../hooks/useComplianceTrends';
 import { useDiagnostics } from '../hooks/useDiagnostics';
+import { useServiceControl } from '../hooks/useServiceControl';
 import { calculateDatabaseUsagePercentage } from '../utils/calculations';
 import { getDatabaseUsageColor } from '../utils/statusHelpers';
 import { formatPercentage, formatGB } from '../utils/formatters';
@@ -14,22 +15,25 @@ import { DASHBOARD_CONSTANTS } from '../utils/dashboardConstants';
 
 const DATABASE_WARNING_THRESHOLD = 80;
 
+type DashboardTab = 'health' | 'trends' | 'services';
+
 interface DashboardProps {
   stats: EnvironmentStats;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
+  const [activeTab, setActiveTab] = useState<DashboardTab>('health');
   const resources = useResourceMonitoring();
   const throughputData = useThroughputData();
   const complianceTrends = useComplianceTrends(stats);
   const { isDiagnosing, runDiagnostics } = useDiagnostics();
+  const { startService, stopService, isControlling } = useServiceControl();
 
-  const pieData = useMemo(() => generatePieChartData(stats), [
-    stats.healthyComputers,
-    stats.warningComputers,
-    stats.criticalComputers,
-    stats
-  ]);
+  const pieData = useMemo(
+    () => generatePieChartData(stats),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [stats.healthyComputers, stats.warningComputers, stats.criticalComputers]
+  );
 
   const dbPercentage = useMemo(
     () => calculateDatabaseUsagePercentage(stats.db.currentSizeGB, stats.db.maxSizeGB),
@@ -41,231 +45,331 @@ const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
   const isConnected = stats.isInstalled && stats.totalComputers > 0;
 
   return (
-    <div className="space-y-4 animate-fadeIn pb-8">
-      {/* Top Banner - Compact */}
-      <div className={`rounded-xl p-4 border flex items-center justify-between relative overflow-hidden shadow-xl ${isConnected ? 'bg-[#121216] border-slate-800/40' : 'bg-rose-900/10 border-rose-500/20'}`}>
-         <div className="flex items-center gap-3 relative z-10">
-            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isConnected ? 'bg-blue-600/10 border border-blue-600/20 text-blue-500' : 'bg-rose-500/10 border border-rose-500/20 text-rose-500'}`}>
-               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-            </div>
-            <div>
-               <h3 className="text-xs font-black tracking-widest uppercase text-white">Environment Integrity</h3>
-               <p className={`text-[10px] font-bold uppercase mt-0.5 ${isConnected ? 'text-slate-300' : 'text-rose-400'}`}>
-                 {isConnected ? 'Infrastructure operational' : 'WSUS not connected'}
-               </p>
-            </div>
-         </div>
-         <div className="flex items-center gap-4 relative z-10">
-            <div className="flex items-center gap-6 pr-4 border-r border-slate-800">
-                <div className="text-right">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">CPU</p>
-                    <p className="text-sm font-black text-white mono">{resources.cpu}%</p>
-                </div>
-                <div className="text-right">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">RAM</p>
-                    <p className="text-sm font-black text-white mono">{formatPercentage(resources.ram)}</p>
-                </div>
-            </div>
-            <div className={`px-3 py-1.5 rounded-lg border ${isConnected ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-rose-500/10 border-rose-500/20'}`}>
-               <span className={`text-[10px] font-black uppercase tracking-wider ${isConnected ? 'text-emerald-500' : 'text-rose-500'}`}>
-                 {isConnected ? 'Stable' : 'Offline'}
-               </span>
-            </div>
-         </div>
+    <div className="h-full flex flex-col animate-fadeIn">
+      {/* Top Stats Row - Always visible */}
+      <div className="flex items-center gap-3 mb-3">
+        {/* Status Badge */}
+        <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${isConnected ? 'bg-theme-card border-theme-secondary' : 'bg-rose-900/10 border-rose-500/20'}`}>
+          <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></div>
+          <span className={`text-xs font-bold uppercase ${isConnected ? 'text-emerald-500' : 'text-rose-500'}`}>
+            {isConnected ? 'Online' : 'Offline'}
+          </span>
+        </div>
+
+        {/* Quick Stats */}
+        <div className="flex-1 grid grid-cols-6 gap-2">
+          <QuickStat label="Nodes" value={stats.totalComputers} />
+          <QuickStat label="Healthy" value={`${stats.totalComputers > 0 ? Math.round((stats.healthyComputers / stats.totalComputers) * 100) : 0}%`} color="emerald" />
+          <QuickStat label="Warning" value={stats.warningComputers} color="amber" />
+          <QuickStat label="Critical" value={stats.criticalComputers} color="rose" />
+          <QuickStat label="CPU" value={`${resources.cpu}%`} />
+          <QuickStat label="RAM" value={formatPercentage(resources.ram)} />
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-         <StatCard label="Total Nodes" value={stats.totalComputers} color="blue" />
-         
-         {/* DB Card */}
-         <div className="bg-[#121216] p-3 rounded-lg border border-slate-800/40 shadow-lg group hover:border-blue-500/30 transition-all">
-            <div className="flex justify-between items-start mb-0.5">
-               <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">DB Usage</p>
-               <span className={`text-[10px] font-black uppercase ${dbPercentage > DATABASE_WARNING_THRESHOLD ? 'text-rose-500' : 'text-amber-500'}`}>
-                  {formatPercentage(dbPercentage)}
-               </span>
-            </div>
-            <p className="text-lg font-black tracking-tight text-white">{formatGB(stats.db.currentSizeGB, 0)} <span className="text-[10px] text-slate-400 font-bold uppercase">/ {formatGB(stats.db.maxSizeGB, 0)}</span></p>
-            <div className="mt-2 h-1 w-full bg-slate-900 rounded-full overflow-hidden">
-               <div 
-                  className={`h-full transition-all duration-1000 ${dbUsageColor}`} 
-                  style={{ width: `${dbPercentage}%` }}
-               ></div>
-            </div>
-         </div>
-
-         <StatCard label="Compliance" value={stats.totalComputers > 0 ? `${Math.round((stats.healthyComputers / stats.totalComputers) * 100)}%` : 'N/A'} color="emerald" />
-         <StatCard label="Storage" value={formatGB(stats.diskFreeGB)} color="slate" />
+      {/* Tab Navigation */}
+      <div className="flex items-center gap-1 mb-3 bg-theme-card p-1 rounded-lg border border-theme-secondary w-fit">
+        <TabButton active={activeTab === 'health'} onClick={() => setActiveTab('health')} label="Health" />
+        <TabButton active={activeTab === 'trends'} onClick={() => setActiveTab('trends')} label="Trends" />
+        <TabButton active={activeTab === 'services'} onClick={() => setActiveTab('services')} label="Services" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 space-y-4">
-          <div className="bg-[#121216] rounded-xl p-5 border border-slate-800/40 relative shadow-xl">
-            <div className="flex justify-between items-center mb-4">
-               <div>
-                  <h3 className="text-xs font-black text-white uppercase tracking-widest">Topology Compliance</h3>
-                  <p className="text-[10px] font-bold text-slate-400 mt-0.5 uppercase">Distribution of Node Health</p>
-               </div>
+      {/* Tab Content - Fills remaining space */}
+      <div className="flex-1 min-h-0">
+        {activeTab === 'health' && (
+          <div className="h-full grid grid-cols-3 gap-3">
+            {/* Node Health Pie Chart */}
+            <div className="col-span-2 bg-theme-card rounded-lg p-4 border border-theme-secondary flex flex-col">
+              <h3 className="text-xs font-bold text-theme-primary uppercase tracking-wide mb-2">Node Health Distribution</h3>
+              <div className="flex-1 min-h-0 flex items-center justify-center relative">
+                {stats.totalComputers === 0 ? (
+                  <div className="text-center">
+                    <p className="text-sm font-bold text-theme-muted uppercase mb-1">No Data</p>
+                    <p className="text-xs text-theme-muted">Connect to WSUS server</p>
+                  </div>
+                ) : (
+                  <>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie 
+                          data={pieData} 
+                          cx="50%" 
+                          cy="50%" 
+                          innerRadius="60%" 
+                          outerRadius="85%" 
+                          paddingAngle={DASHBOARD_CONSTANTS.PIE_CHART_PADDING_ANGLE} 
+                          dataKey="value" 
+                          stroke="none"
+                        >
+                          {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                        </Pie>
+                        <Tooltip contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-secondary)', borderRadius: '6px', fontSize: '12px', color: 'var(--text-primary)' }} itemStyle={{ color: 'var(--text-primary)' }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="absolute flex flex-col items-center">
+                      <span className="text-3xl font-bold text-theme-primary">{stats.totalComputers}</span>
+                      <span className="text-xs text-theme-muted font-bold uppercase">Total</span>
+                    </div>
+                  </>
+                )}
+              </div>
+              {/* Legend */}
+              <div className="flex justify-center gap-6 mt-2 pt-2 border-t border-theme-secondary">
+                <LegendItem color="bg-emerald-500" label="Healthy" value={stats.healthyComputers} />
+                <LegendItem color="bg-amber-500" label="Warning" value={stats.warningComputers} />
+                <LegendItem color="bg-rose-500" label="Critical" value={stats.criticalComputers} />
+              </div>
             </div>
-            {stats.totalComputers === 0 ? (
-              <div className="h-[160px] w-full flex items-center justify-center">
-                <div className="text-center">
-                  <p className="text-sm font-black text-slate-400 uppercase tracking-widest mb-1">No Data Available</p>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Connect to WSUS server to view topology</p>
+
+            {/* Database & Storage */}
+            <div className="flex flex-col gap-3">
+              {/* Database Usage */}
+              <div className="bg-theme-card rounded-lg p-4 border border-theme-secondary flex-1">
+                <h3 className="text-xs font-bold text-theme-primary uppercase tracking-wide mb-3">Database</h3>
+                <div className="flex items-end justify-between mb-2">
+                  <span className="text-2xl font-bold text-theme-primary">{formatGB(stats.db.currentSizeGB, 1)}</span>
+                  <span className="text-xs text-theme-muted">/ {formatGB(stats.db.maxSizeGB, 0)}</span>
+                </div>
+                <div className="h-2 w-full bg-theme-secondary rounded-full overflow-hidden mb-2">
+                  <div className={`h-full transition-all duration-1000 ${dbUsageColor}`} style={{ width: `${dbPercentage}%` }}></div>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-theme-muted">Usage</span>
+                  <span className={`font-bold ${dbPercentage > DATABASE_WARNING_THRESHOLD ? 'text-rose-500' : 'text-amber-500'}`}>
+                    {formatPercentage(dbPercentage)}
+                  </span>
                 </div>
               </div>
-            ) : (
-              <div className="h-[160px] w-full flex items-center justify-center">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie 
-                      data={pieData} 
-                      cx="50%" 
-                      cy="50%" 
-                      innerRadius={50} 
-                      outerRadius={70} 
-                      paddingAngle={DASHBOARD_CONSTANTS.PIE_CHART_PADDING_ANGLE} 
-                      dataKey="value" 
-                      stroke="none"
-                    >
-                      {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
-                    </Pie>
-                    <Tooltip contentStyle={{ backgroundColor: '#121216', border: '1px solid #1e293b', borderRadius: '8px', fontSize: '10px' }} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="absolute flex flex-col items-center">
-                  <span className="text-2xl font-black text-white tracking-tighter">{stats.totalComputers}</span>
-                  <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Nodes</span>
+
+              {/* Storage */}
+              <div className="bg-theme-card rounded-lg p-4 border border-theme-secondary flex-1">
+                <h3 className="text-xs font-bold text-theme-primary uppercase tracking-wide mb-3">Storage</h3>
+                <div className="flex items-end justify-between mb-2">
+                  <span className="text-2xl font-bold text-theme-primary">{formatGB(stats.diskFreeGB, 0)}</span>
+                  <span className="text-xs text-theme-muted">free</span>
+                </div>
+                <div className="text-xs text-theme-muted">
+                  Instance: {stats.db.instanceName || 'N/A'}
                 </div>
               </div>
-            )}
+            </div>
           </div>
+        )}
 
-          {/* Compliance Trends Chart */}
-          <div className="bg-[#121216] rounded-xl p-4 border border-slate-800/40 shadow-lg">
-             <div className="flex justify-between items-center mb-3">
-                <div>
-                  <h3 className="text-xs font-black text-white uppercase tracking-widest">Compliance Trends</h3>
-                  <p className="text-[10px] font-bold text-slate-400 mt-0.5 uppercase">30-Day Historical View</p>
-                </div>
+        {activeTab === 'trends' && (
+          <div className="h-full grid grid-cols-2 gap-3">
+            {/* Compliance Trends */}
+            <div className="bg-theme-card rounded-lg p-4 border border-theme-secondary flex flex-col">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="text-xs font-bold text-theme-primary uppercase tracking-wide">Compliance Trend</h3>
                 {complianceTrends.length > 0 && (
-                  <span className="text-[10px] font-bold text-emerald-500 mono uppercase tracking-tight">
-                    Current: {complianceTrends[complianceTrends.length - 1]?.compliance || 0}%
+                  <span className="text-sm font-bold text-emerald-500 mono">
+                    {complianceTrends[complianceTrends.length - 1]?.compliance || 0}%
                   </span>
                 )}
-             </div>
-             {complianceTrends.length === 0 ? (
-               <div className="h-32 w-full flex items-center justify-center">
-                 <div className="text-center">
-                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">No trend data available</p>
-                 </div>
-               </div>
-             ) : (
-               <div className="h-32 w-full">
-                 <ResponsiveContainer width="100%" height="100%">
-                   <LineChart data={complianceTrends}>
-                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                     <XAxis 
-                       dataKey="date" 
-                       stroke="#64748b"
-                       tick={{ fill: '#64748b', fontSize: 8, fontWeight: 'bold' }}
-                       interval="preserveStartEnd"
-                     />
-                     <YAxis 
-                       domain={[0, 100]}
-                       stroke="#64748b"
-                       tick={{ fill: '#64748b', fontSize: 8, fontWeight: 'bold' }}
-                       width={30}
-                     />
-                     <Tooltip 
-                       contentStyle={{ backgroundColor: '#121216', border: '1px solid #1e293b', borderRadius: '8px', fontSize: '10px', padding: '6px' }}
-                       labelStyle={{ color: '#94a3b8', fontWeight: 'bold', fontSize: '8px' }}
-                     />
-                     <Line 
-                       type="monotone" 
-                       dataKey="compliance" 
-                       stroke="#10b981" 
-                       strokeWidth={2}
-                       dot={{ fill: '#10b981', r: 2 }}
-                       activeDot={{ r: 4 }}
-                       name="Compliance %"
-                     />
-                   </LineChart>
-                 </ResponsiveContainer>
-               </div>
-             )}
-          </div>
+              </div>
+              <div className="flex-1 min-h-0">
+                {complianceTrends.length === 0 ? (
+                  <div className="h-full flex items-center justify-center">
+                    <p className="text-xs text-theme-muted">No trend data available</p>
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={complianceTrends}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border-secondary)" />
+                      <XAxis dataKey="date" stroke="var(--text-muted)" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} interval="preserveStartEnd" />
+                      <YAxis domain={[0, 100]} stroke="var(--text-muted)" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} width={30} />
+                      <Tooltip contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-secondary)', borderRadius: '6px', fontSize: '12px', color: 'var(--text-primary)' }} itemStyle={{ color: 'var(--text-primary)' }} />
+                      <Line type="monotone" dataKey="compliance" stroke="#10b981" strokeWidth={2} dot={{ r: 2 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
 
-          {/* Network Graph Simulation */}
-          <div className="bg-[#121216] rounded-xl p-4 border border-slate-800/40 shadow-lg">
-             <div className="flex justify-between items-center mb-3">
-                <h3 className="text-xs font-black text-white uppercase tracking-widest">Network Throughput</h3>
-                <span className="text-[10px] font-bold text-slate-400 mono uppercase tracking-tight">Active: {(throughputData[throughputData.length - 1]?.val || 0).toFixed(1)} Mbps</span>
-             </div>
-             <div className="h-20 w-full">
+            {/* Network Throughput */}
+            <div className="bg-theme-card rounded-lg p-4 border border-theme-secondary flex flex-col">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="text-xs font-bold text-theme-primary uppercase tracking-wide">Network Throughput</h3>
+                <span className="text-sm font-bold text-blue-500 mono">
+                  {(throughputData[throughputData.length - 1]?.val || 0).toFixed(1)} Mbps
+                </span>
+              </div>
+              <div className="flex-1 min-h-0">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={throughputData}>
-                    <Area type="monotone" dataKey="val" stroke="#2563eb" fill="#2563eb" fillOpacity={0.1} isAnimationActive={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-secondary)" />
+                    <XAxis dataKey="time" stroke="var(--text-muted)" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} />
+                    <YAxis stroke="var(--text-muted)" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} width={30} />
+                    <Tooltip contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-secondary)', borderRadius: '6px', fontSize: '12px', color: 'var(--text-primary)' }} itemStyle={{ color: 'var(--text-primary)' }} />
+                    <Area type="monotone" dataKey="val" stroke="#2563eb" fill="#2563eb" fillOpacity={0.2} />
                   </AreaChart>
                 </ResponsiveContainer>
-             </div>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
 
-        <div className="bg-[#121216] rounded-xl p-5 border border-slate-800/40 flex flex-col shadow-xl">
-           <h3 className="text-xs font-black text-white uppercase tracking-widest mb-1">Service Monitor</h3>
-           <p className="text-[10px] font-bold text-slate-400 mb-4 uppercase">Live Runtime Heartbeat</p>
-           <div className="space-y-2 flex-1">
-              {stats.services.length === 0 ? (
-                <div className="p-3 text-center">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">No service data available</p>
-                </div>
-              ) : (
-                stats.services.map((s, i) => (
-                  <div key={i} className="flex items-center justify-between p-3 bg-black/40 rounded-lg border border-slate-800/30 group hover:border-blue-500/20 transition-all">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-1.5 h-1.5 rounded-full ${s.status === 'Running' ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-rose-500 shadow-[0_0_8px_#ef4444]'}`}></div>
-                      <span className="text-[10px] font-bold text-slate-300 uppercase tracking-tight">{s.name}</span>
-                    </div>
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">{s.status}</span>
+        {activeTab === 'services' && (
+          <div className="h-full grid grid-cols-2 gap-3">
+            {/* Services List */}
+            <div className="bg-theme-card rounded-lg p-4 border border-theme-secondary flex flex-col">
+              <h3 className="text-xs font-bold text-theme-primary uppercase tracking-wide mb-3">Service Status</h3>
+              <div className="flex-1 space-y-2 overflow-auto">
+                {stats.services.length === 0 ? (
+                  <div className="h-full flex items-center justify-center">
+                    <p className="text-xs text-theme-muted">No services detected</p>
                   </div>
-                ))
-              )}
-           </div>
-           <button 
-            disabled={isDiagnosing}
-            onClick={runDiagnostics}
-            className={`w-full mt-4 py-3 border rounded-lg text-[10px] font-black uppercase tracking-widest transition-all shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-900 ${isDiagnosing ? 'bg-blue-600 text-white animate-pulse' : 'bg-slate-900 hover:bg-slate-800 border-slate-800/50 text-slate-300 hover:text-white'}`}
-            aria-label="Run infrastructure diagnostics"
-            aria-busy={isDiagnosing}
-           >
-              {isDiagnosing ? 'Diagnostics Active...' : 'Run Infrastructure Test'}
-           </button>
-        </div>
+                ) : (
+                  stats.services.map((s, i) => (
+                    <ServiceRow 
+                      key={i} 
+                      service={s} 
+                      onStart={() => startService(s.name)}
+                      onStop={() => stopService(s.name)}
+                      isControlling={isControlling === s.name}
+                    />
+                  ))
+                )}
+              </div>
+              <button 
+                disabled={isDiagnosing}
+                onClick={runDiagnostics}
+                className={`w-full mt-3 py-2.5 border rounded-lg text-xs font-bold uppercase tracking-wide transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${isDiagnosing ? 'bg-blue-600 text-white animate-pulse' : 'bg-theme-secondary hover:bg-theme-secondary/80 border-theme-secondary text-theme-secondary hover:text-theme-primary'}`}
+              >
+                {isDiagnosing ? 'Running Diagnostics...' : 'Run Diagnostics'}
+              </button>
+            </div>
+
+            {/* System Info */}
+            <div className="bg-theme-card rounded-lg p-4 border border-theme-secondary flex flex-col">
+              <h3 className="text-xs font-bold text-theme-primary uppercase tracking-wide mb-3">System Information</h3>
+              <div className="flex-1 space-y-3">
+                <InfoRow label="WSUS Status" value={stats.isInstalled ? 'Installed' : 'Not Detected'} status={stats.isInstalled} />
+                <InfoRow label="Total Updates" value={stats.totalUpdates.toString()} />
+                <InfoRow label="Security Updates" value={stats.securityUpdatesCount.toString()} />
+                <InfoRow label="Automation" value={stats.automationStatus} />
+                <InfoRow label="Content Path" value={stats.db.contentPath || 'N/A'} />
+                <InfoRow label="Last Backup" value={stats.db.lastBackup || 'Never'} />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
-interface StatCardProps {
-  label: string;
-  value: string | number;
-  color: 'blue' | 'amber' | 'emerald' | 'slate';
-}
-
-const StatCard: React.FC<StatCardProps> = ({ label, value, color }) => {
+// Helper Components
+const QuickStat: React.FC<{ label: string; value: string | number; color?: string }> = ({ label, value, color }) => {
   const colorMap: Record<string, string> = {
-    blue: 'text-blue-500',
-    amber: 'text-amber-500',
     emerald: 'text-emerald-500',
-    slate: 'text-slate-400'
+    amber: 'text-amber-500',
+    rose: 'text-rose-500',
   };
+  const colorClass = color ? colorMap[color] || 'text-theme-primary' : 'text-theme-primary';
   return (
-    <div className="bg-[#121216] p-3 rounded-lg border border-slate-800/40 shadow-lg group hover:border-blue-500/20 transition-all">
-      <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-0.5">{label}</p>
-      <p className={`text-lg font-black tracking-tight ${colorMap[color]}`}>{value}</p>
+    <div className="bg-theme-card px-3 py-2 rounded-lg border border-theme-secondary">
+      <p className="text-xs text-theme-muted font-medium">{label}</p>
+      <p className={`text-sm font-bold ${colorClass}`}>{value}</p>
     </div>
   );
 };
 
-export default Dashboard;
+const TabButton: React.FC<{ active: boolean; onClick: () => void; label: string }> = ({ active, onClick, label }) => (
+  <button
+    onClick={onClick}
+    className={`px-4 py-1.5 rounded-md text-xs font-bold uppercase tracking-wide transition-all ${
+      active ? 'bg-blue-600 text-white' : 'text-theme-secondary hover:text-theme-primary hover:bg-theme-secondary/20'
+    }`}
+  >
+    {label}
+  </button>
+);
+
+const LegendItem: React.FC<{ color: string; label: string; value: number }> = ({ color, label, value }) => (
+  <div className="flex items-center gap-2">
+    <div className={`w-2.5 h-2.5 rounded-full ${color}`}></div>
+    <span className="text-xs text-theme-muted">{label}:</span>
+    <span className="text-xs font-bold text-theme-primary">{value}</span>
+  </div>
+);
+
+const InfoRow: React.FC<{ label: string; value: string; status?: boolean }> = ({ label, value, status }) => (
+  <div className="flex items-center justify-between p-2 bg-theme-input rounded border border-theme-secondary">
+    <span className="text-xs text-theme-muted">{label}</span>
+    <span className={`text-xs font-bold ${status !== undefined ? (status ? 'text-emerald-500' : 'text-rose-500') : 'text-theme-primary'}`}>
+      {value}
+    </span>
+  </div>
+);
+
+interface ServiceRowProps {
+  service: ServiceState;
+  onStart: () => void;
+  onStop: () => void;
+  isControlling: boolean;
+}
+
+const ServiceRow: React.FC<ServiceRowProps> = ({ service, onStart, onStop, isControlling }) => {
+  const isRunning = service.status === 'Running';
+  const isStopped = service.status === 'Stopped';
+  
+  const handleClick = () => {
+    if (isControlling) return;
+    if (isStopped) {
+      onStart();
+    } else if (isRunning) {
+      onStop();
+    }
+  };
+
+  return (
+    <div 
+      className={`flex items-center justify-between p-3 bg-theme-input rounded-lg border transition-all ${
+        isControlling 
+          ? 'border-blue-500/50 bg-blue-500/10' 
+          : isStopped 
+            ? 'border-rose-500/30 hover:border-emerald-500/50 cursor-pointer hover:bg-emerald-500/5' 
+            : 'border-theme-secondary hover:border-rose-500/50 cursor-pointer hover:bg-rose-500/5'
+      }`}
+      onClick={handleClick}
+      title={isControlling ? 'Working...' : isStopped ? 'Click to start service' : 'Click to stop service'}
+    >
+      <div className="flex items-center gap-3">
+        <div className={`w-2.5 h-2.5 rounded-full ${
+          isControlling 
+            ? 'bg-blue-500 animate-pulse' 
+            : isRunning 
+              ? 'bg-emerald-500 shadow-[0_0_6px_#10b981]' 
+              : 'bg-rose-500 shadow-[0_0_6px_#ef4444]'
+        }`}></div>
+        <div>
+          <span className="text-sm font-medium text-theme-primary block">{service.name}</span>
+          <span className="text-xs text-theme-muted">Type: {service.type}</span>
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        {isControlling ? (
+          <span className="text-xs font-bold text-blue-500 animate-pulse">Working...</span>
+        ) : (
+          <>
+            <span className={`text-xs font-bold uppercase px-2 py-1 rounded ${
+              isRunning ? 'text-emerald-500 bg-emerald-500/10' : 'text-rose-500 bg-rose-500/10'
+            }`}>
+              {service.status}
+            </span>
+            {isStopped && (
+              <span className="text-xs text-emerald-500 opacity-60">▶ Start</span>
+            )}
+            {isRunning && (
+              <span className="text-xs text-rose-500 opacity-60">■ Stop</span>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default React.memo(Dashboard);

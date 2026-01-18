@@ -1,4 +1,4 @@
-import React, { ReactNode, useEffect } from 'react';
+import React, { ReactNode } from 'react';
 import { ServiceProvider } from '../context/ServiceContext';
 import { createContainer } from '../../di/bootstrap';
 import { stateServiceBridge } from '../../bridge/StateServiceBridge';

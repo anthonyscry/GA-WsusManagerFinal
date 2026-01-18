@@ -38,23 +38,23 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       aria-describedby="confirm-dialog-message"
     >
       <div 
-        className="bg-[#121216] w-full max-w-md rounded-2xl border border-slate-800 shadow-2xl overflow-hidden animate-scaleIn"
+        className="bg-theme-card w-full max-w-md rounded-2xl border border-theme-secondary shadow-2xl overflow-hidden animate-scaleIn"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-6 border-b border-slate-800">
-          <h3 id="confirm-dialog-title" className="text-lg font-black text-white uppercase tracking-tight">
+        <div className="p-6 border-b border-theme-secondary">
+          <h3 id="confirm-dialog-title" className="text-lg font-black text-theme-primary uppercase tracking-tight">
             {title}
           </h3>
         </div>
         <div className="p-6">
-          <p id="confirm-dialog-message" className="text-sm text-slate-300 leading-relaxed">
+          <p id="confirm-dialog-message" className="text-sm text-theme-secondary leading-relaxed">
             {message}
           </p>
         </div>
-        <div className="p-6 bg-black/40 border-t border-slate-800 flex gap-3">
+        <div className="p-6 bg-theme-input border-t border-theme-secondary flex gap-3">
           <button
             onClick={onCancel}
-            className="flex-1 py-3 px-4 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white rounded-lg text-sm font-semibold uppercase tracking-widest transition-all focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
+            className="flex-1 py-3 px-4 bg-theme-secondary hover:bg-theme-secondary/80 text-theme-secondary hover:text-theme-primary rounded-lg text-sm font-semibold uppercase tracking-widest transition-all focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
             aria-label={cancelLabel}
           >
             {cancelLabel}

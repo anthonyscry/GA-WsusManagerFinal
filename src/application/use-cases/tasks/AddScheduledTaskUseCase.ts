@@ -19,6 +19,8 @@ export class AddScheduledTaskUseCase {
     name: string;
     trigger: 'Daily' | 'Weekly' | 'Monthly';
     time: string;
+    dayOfMonth?: number;
+    daysOfWeek?: string[];
   }): Promise<ScheduledTask> {
     // Validate input
     if (!input.name || input.name.trim().length === 0) {
@@ -37,9 +39,11 @@ export class AddScheduledTaskUseCase {
       const scriptPath = 'C:\\WSUS\\Scripts\\Invoke-WsusMonthlyMaintenance.ps1';
       
       // Build the PowerShell command to register the scheduled task
+      const daysOfWeek = input.daysOfWeek?.join(',') || 'Monday';
+      const dayOfMonth = input.dayOfMonth || 1;
       const triggerParam = input.trigger === 'Daily' ? '-Daily' : 
-                          input.trigger === 'Weekly' ? '-Weekly -DaysOfWeek Monday' : 
-                          '-Monthly -DaysOfMonth 1';
+                          input.trigger === 'Weekly' ? `-Weekly -DaysOfWeek ${daysOfWeek}` : 
+                          `-Monthly -DaysOfMonth ${dayOfMonth}`;
       
       const psCommand = `
         $ErrorActionPreference = 'Stop'

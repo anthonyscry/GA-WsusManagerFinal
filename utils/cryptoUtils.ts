@@ -4,7 +4,6 @@
  * Uses Web Crypto API for encryption
  */
 
-const VAULT_KEY_NAME = 'wsus_vault_key';
 const IV_LENGTH = 12; // 96 bits for AES-GCM
 
 /**

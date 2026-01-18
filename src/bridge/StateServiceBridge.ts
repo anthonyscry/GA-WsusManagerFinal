@@ -114,7 +114,7 @@ export class StateServiceBridge {
     if (this.useNewArchitecture && this.container) {
       try {
         const useCase = this.container.resolve<ProcessTerminalCommandUseCase>('PROCESS_TERMINAL_COMMAND_USE_CASE');
-        useCase.execute(cmd).catch((error: unknown) => {
+        useCase.execute(cmd).catch(() => {
           // Error handling is done in the use case
           // Just fall back to StateService
         });
@@ -135,10 +135,11 @@ export class StateServiceBridge {
   getStats() {
     if (this.useNewArchitecture && this.container) {
       try {
-        const statsRepo = this.container.resolve<IStatsRepository>(TOKENS.STATS_REPOSITORY);
+        // Resolve but don't use - architecture placeholder for future async support
+        this.container.resolve<IStatsRepository>(TOKENS.STATS_REPOSITORY);
         // Note: This is async, but StateService.getStats() is sync
         // For now, fall back to StateService for sync access
-      } catch (error) {
+      } catch {
         // Fall through
       }
     }
@@ -152,10 +153,11 @@ export class StateServiceBridge {
   getComputers() {
     if (this.useNewArchitecture && this.container) {
       try {
-        const computerRepo = this.container.resolve<IComputerRepository>(TOKENS.COMPUTER_REPOSITORY);
+        // Resolve but don't use - architecture placeholder for future async support
+        this.container.resolve<IComputerRepository>(TOKENS.COMPUTER_REPOSITORY);
         // Note: This is async, but StateService.getComputers() is sync
         // For now, fall back to StateService for sync access
-      } catch (error) {
+      } catch {
         // Fall through
       }
     }
@@ -169,10 +171,11 @@ export class StateServiceBridge {
   getTasks() {
     if (this.useNewArchitecture && this.container) {
       try {
-        const taskRepo = this.container.resolve<ITaskRepository>(TOKENS.TASK_REPOSITORY);
+        // Resolve but don't use - architecture placeholder for future async support
+        this.container.resolve<ITaskRepository>(TOKENS.TASK_REPOSITORY);
         // Note: This is async, but StateService.getTasks() is sync
         // For now, fall back to StateService for sync access
-      } catch (error) {
+      } catch {
         // Fall through
       }
     }

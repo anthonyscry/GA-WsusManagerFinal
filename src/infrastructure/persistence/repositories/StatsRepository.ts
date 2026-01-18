@@ -56,7 +56,9 @@ export class StatsRepository implements IStatsRepository {
       (data.criticalComputers as number) || 0,
       (data.totalUpdates as number) || 0,
       (data.securityUpdatesCount as number) || 0,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (data.services as any[]) || [],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       data.db as any,
       (data.isInstalled as boolean) || false,
       (data.diskFreeGB as number) || 0,

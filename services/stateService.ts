@@ -68,6 +68,7 @@ class StateService {
   private refreshLock: Promise<void> | null = null;
   private commandHistory: Map<string, number> = new Map();
   private statsCacheTime: number = 0;
+  private persistTimeout: NodeJS.Timeout | null = null;
 
   // Allowed terminal commands
   private readonly ALLOWED_COMMANDS = new Set(['help', 'status', 'clear', 'reindex', 'cleanup', 'ping']);
@@ -149,32 +150,45 @@ class StateService {
         try {
           l();
         } catch (error) {
-          console.error('Listener error:', error);
+          loggingService.error('Listener error: ' + (error instanceof Error ? error.message : 'Unknown'));
         }
       });
       
-      // Handle localStorage quota errors
-      try {
-        localStorage.setItem(STORAGE_KEY_STATS, JSON.stringify(this.stats));
-        localStorage.setItem(STORAGE_KEY_COMPUTERS, JSON.stringify(this.computers));
-        localStorage.setItem(STORAGE_KEY_TASKS, JSON.stringify(this.tasks));
-      } catch (error: unknown) {
-        if (error instanceof Error && error.name === 'QuotaExceededError') {
-          // Clear old data and retry
-          this.clearOldStorage();
-          try {
-            localStorage.setItem(STORAGE_KEY_STATS, JSON.stringify(this.stats));
-            localStorage.setItem(STORAGE_KEY_COMPUTERS, JSON.stringify(this.computers));
-            localStorage.setItem(STORAGE_KEY_TASKS, JSON.stringify(this.tasks));
-          } catch (retryError) {
-            loggingService.error('Storage quota exceeded. Data not persisted.');
-          }
-        } else {
-          loggingService.error('Failed to persist state');
-        }
-      }
+      // Debounce localStorage writes - wait 1 second before persisting
+      this.debouncedPersist();
     } catch (error) {
-      console.error('Notify error:', error);
+      loggingService.error('Notify error: ' + (error instanceof Error ? error.message : 'Unknown'));
+    }
+  }
+
+  private debouncedPersist() {
+    if (this.persistTimeout) {
+      clearTimeout(this.persistTimeout);
+    }
+    this.persistTimeout = setTimeout(() => {
+      this.persistToStorage();
+    }, 1000);
+  }
+
+  private persistToStorage() {
+    try {
+      localStorage.setItem(STORAGE_KEY_STATS, JSON.stringify(this.stats));
+      localStorage.setItem(STORAGE_KEY_COMPUTERS, JSON.stringify(this.computers));
+      localStorage.setItem(STORAGE_KEY_TASKS, JSON.stringify(this.tasks));
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === 'QuotaExceededError') {
+        // Clear old data and retry
+        this.clearOldStorage();
+        try {
+          localStorage.setItem(STORAGE_KEY_STATS, JSON.stringify(this.stats));
+          localStorage.setItem(STORAGE_KEY_COMPUTERS, JSON.stringify(this.computers));
+          localStorage.setItem(STORAGE_KEY_TASKS, JSON.stringify(this.tasks));
+        } catch (retryError) {
+          loggingService.error('Storage quota exceeded. Data not persisted.');
+        }
+      } else {
+        loggingService.error('Failed to persist state');
+      }
     }
   }
 
@@ -538,24 +552,20 @@ class StateService {
 
     this.startJob(`Bulk ${action} (${ids.length} Nodes)`, 3500, async () => {
         if (this.useRealServices && action === 'SYNC') {
+          // NOTE: forceComputerSync removed - PsExec-based remote execution is a security risk
+          // Users should run 'wuauclt /detectnow' or 'usoclient StartScan' directly on client machines
+          // Or configure GPO to set automatic check-in schedules
+          loggingService.warn('Force sync not available - run wuauclt /detectnow on clients directly or use GPO');
+          
+          // Refresh computer list to show current state
           try {
-            for (const id of ids) {
-              const computer = this.computers.find(c => c.id === id);
-              if (!computer) continue;
-              const success = await wsusService.forceComputerSync(computer.name);
-              if (success) {
-                computer.lastSync = new Date().toISOString().replace('T', ' ').slice(0, 16);
-                computer.status = HealthStatus.HEALTHY;
-              }
-            }
-            // Refresh computer list
             const computers = await wsusService.getComputers();
             if (computers && computers.length > 0) {
               this.computers = computers;
             }
           } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-            loggingService.error(`Bulk sync error: ${errorMessage}`);
+            loggingService.error(`Failed to refresh computers: ${errorMessage}`);
           }
         } else {
           loggingService.error(`WSUS services not available - bulk ${action} action cannot be performed`);
